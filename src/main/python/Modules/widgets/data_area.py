@@ -22,11 +22,17 @@ class DataArea(QScrollArea):
     min_h = 550
     margin = 1
     def __init__(self, *args, **kwargs):
-        self.min_w = self.data_min_w * 2 + self.info_w
-        super().__init__(*args, **kwargs)
+        self.image_on = kwargs.get("image_on", False)
+        if self.image_on:
+            width_factor = 3
+        else:
+            width_factor = 2
+        self.min_w = self.data_min_w * width_factor + self.info_w
+        super().__init__()
         # main widgets
         self.chromatogram_layout = ChromatogramLayout(data_area=self)
         self.spectrum_layout = SpectrumLayout(data_area=self)
+        self.mz_RT_image_layout = MzRTImageLayout(data_area=self)
         self.info_layout = InfoLayout(data_area=self)
         self.setMinimumSize(self.min_w, self.min_h + self.margin * 2)
         # scroll
@@ -36,6 +42,8 @@ class DataArea(QScrollArea):
         scroll_widget.layout().setSpacing(0)
         scroll_widget.layout().addLayout(self.chromatogram_layout)
         scroll_widget.layout().addLayout(self.spectrum_layout)
+        if self.image_on:
+            scroll_widget.layout().addLayout(self.mz_RT_image_layout)
         scroll_widget.layout().addLayout(self.info_layout)
         self.setWidgetResizable(True)
         self.setWidget(scroll_widget)
@@ -44,6 +52,7 @@ class DataArea(QScrollArea):
         for i in range(N_data):
             self.chromatogram_layout.add_window()
             self.spectrum_layout.add_window()
+            self.mz_RT_image_layout.add_window()
             self.info_layout.add_window()
     def set_spectrum_window_type(self, spectrum_type, index):
         self.spectrum_layout.window_at(index).set_window_type(spectrum_type)
@@ -52,6 +61,16 @@ class DataArea(QScrollArea):
         return self.spectrum_layout.window_at(ref_index).viewRange()
     def get_view_range_c(self, ref_index):
         return self.chromatogram_layout.window_at(ref_index).viewRange()
+    def get_image_contrast_all(self):
+        inten_min = np.inf
+        inten_max = 0
+        for mz_RT_image_window in self.mz_RT_image_layout:
+            min, max = mz_RT_image_window.get_intensity_min_max()
+            if min < inten_min:
+                inten_min = min
+            if max > inten_max:
+                inten_max = max
+        return inten_min, inten_max
     # updators for data
     def update_chromatograms(self, chromatograms):
         for i, chromatogram in enumerate(chromatograms):
@@ -66,6 +85,11 @@ class DataArea(QScrollArea):
         self.chromatogram_layout.window_at(index).update_chromatogram(chromatogram)
     def update_spectrum(self, spectrum, index):
         self.spectrum_layout.window_at(index).update_spectrum(spectrum)
+    def update_mz_RT_image(self, rpd, index):
+        if self.image_on:
+            self.mz_RT_image_layout.window_at(index).update_mz_RT_image(rpd)
+        else:
+            self.mz_RT_image_layout.window_at(index).update_mz_RT_image_pseudo(rpd)
     def update_info(self, info, index):
         self.info_layout.window_at(index).update_info(info)
     # updators for regions
@@ -143,6 +167,10 @@ class DataArea(QScrollArea):
             for chromatogram_window in self.chromatogram_layout:
                 chromatogram_window.setMyYRange(y_min, y_max)
         return chromatogram_window.viewRange_y()
+    def set_image_contrast_auto(self):
+        inten_min, inten_max = self.get_image_contrast_all()
+        self.set_image_contrast(inten_min, inten_max)
+        return inten_min, inten_max
     def reset_X_range_s(self):
         # get
         x_min = np.nan
@@ -158,8 +186,9 @@ class DataArea(QScrollArea):
         if np.isnan(x_min):   # 表示すべきものがない場合
             return
         # set
-        for spectrum_window in self.spectrum_layout:
+        for spectrum_window, mz_RT_image_window in zip(self.spectrum_layout, self.mz_RT_image_layout):
             spectrum_window.setXRange(x_min, x_max, padding=0)
+            mz_RT_image_window.setYRange(x_min, x_max, padding=0)
         return x_min, x_max
     def reset_X_range_c(self):
         # get
@@ -176,8 +205,9 @@ class DataArea(QScrollArea):
         if np.isnan(x_min):   # 表示すべきものがない場合
             return
         # set
-        for chromatogram_window in self.chromatogram_layout:
+        for chromatogram_window, mz_RT_image_window in zip(self.chromatogram_layout, self.mz_RT_image_layout):
             chromatogram_window.setXRange(x_min, x_max, padding=0)
+            mz_RT_image_window.setXRange(x_min, x_max, padding=0)
         return x_min, x_max
     def set_view_range_s_x(self, x_min, x_max):
         for spectrum_window in self.spectrum_layout:
@@ -191,6 +221,15 @@ class DataArea(QScrollArea):
     def set_view_range_c_y(self, y_min, y_max):
         for chromatogram_window in self.chromatogram_layout:
             chromatogram_window.setYRange(y_min, y_max, padding=0)
+    def set_view_range_i_mz(self, mz_min, mz_max):
+        for mz_RT_image_window in self.mz_RT_image_layout:
+            mz_RT_image_window.setYRange(mz_min, mz_max, padding=0)
+    def set_view_range_i_RT(self, RT_min, RT_max):
+        for mz_RT_image_window in self.mz_RT_image_layout:
+            mz_RT_image_window.setXRange(RT_min, RT_max, padding=0)
+    def set_image_contrast(self, inten_min, inten_max):
+        for mz_RT_image_window in self.mz_RT_image_layout:
+            mz_RT_image_window.set_contrast(inten_min, inten_max)
     # autorange (mainly when files are opened)
     def autorange_s_all(self):
         # get
@@ -322,6 +361,19 @@ class SpectrumLayout(MyLayout):
             lambda spectrum_window: self.view_range_changed.emit(spectrum_window))
     def update_spectrum_at(self, i, spectrum):
         self.itemAt(i).widget().update_spectrum(spectrum)
+
+class MzRTImageLayout(MyLayout):
+    def __init__(self, data_area, *keys, **kwargs):
+        super().__init__(data_area, *keys, **kwargs)
+    def add_window(self):
+        mz_RT_image_window = dw.MzRTImageWindow()
+        mz_RT_image_window.setFixedHeight(self.data_area.data_info_h)
+        self.insertWidget(self.count() - 1, mz_RT_image_window)
+        # event connect
+        mz_RT_image_window.view_box_clicked.connect(
+            lambda x_value, y_value: self.window_clicked.emit(x_value, y_value, mz_RT_image_window))
+        mz_RT_image_window.sigRangeChanged.connect(
+            lambda mz_RT_image_window: self.view_range_changed.emit(mz_RT_image_window))
 
 class InfoLayout(MyLayout):
     def __init__(self, *keys, **kwargs):

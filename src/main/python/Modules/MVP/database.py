@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
+from scipy import interpolate
 from ..cython import rpd_calc
 from ..process import deisotoping as diso
 
@@ -46,7 +47,9 @@ class RPD():
         #########################################
         # attributes that are totally unrelated #
         #########################################
-        self.inten_info_set_list_b4_deisotoping = IntenInfoSetList()
+        self.inten_info_set_list_b4_deisotoping = IntenInfoSetList(len(self.RT_list))
+    def ref_mz_list(self):
+        return self.mz_set[self.ref_row]
     # used when dumping rpd data (required for reversible data compression)
     def get_mz_set_nan_start_locs(self):
         row_info, col_info = np.where(np.isnan(self.mz_set))
@@ -91,10 +94,34 @@ class RPD():
                 else:
                     j += 1
         return mz_set_info_for_chromatogram_extraction
+    def extract_mz_RT_2d_image(self, mz_range, RT_range):
+        RT_idx_btm = rpd_calc.index_greater_than(RT_range[0], array1d=self.RT_list)
+        RT_idx_top = rpd_calc.index_greater_than(RT_range[1], array1d=self.RT_list)
+        mz_btm_idx_on_ref_row = max(rpd_calc.index_greater_than(mz_range[0], self.ref_mz_list()) - 1, 0)
+        mz_top_idx_on_ref_row = min(rpd_calc.index_greater_than(mz_range[1], self.ref_mz_list())    , self.mz_set.shape[1] - 1)
+
+        extracted_inten_set = self.inten_set[RT_idx_btm:RT_idx_top, mz_btm_idx_on_ref_row:mz_top_idx_on_ref_row]
+        return extracted_inten_set
+
+    def to_mz_RT_image(self):
+        f = interpolate.interp1d(self.ref_mz_list(), self.inten_set, axis=1)
+        return f(np.linspace(self.ref_mz_list()[0], self.ref_mz_list()[-1], num=len(self.ref_mz_list())))
+
     # chromatgram extraction related functions
     def extract_chromatogram(self, mz_btm, mz_top):
         # inten_list = self.extract_chromatogram_core(mz_btm, mz_top, self.mz_set, self.inten_set)
         inten_list = self.extract_chromatogram_core_with_cython(mz_btm, mz_top)
+        return (self.RT_list, inten_list), self.extract_chromatogram_b4_deisotoping(mz_btm, mz_top)
+    def extract_chromatogram_fast(self, mz_btm, mz_top): # inaccurate, but ignorable for Q-TOF data
+        # self.ref_row において、基準となる idx を求める
+        mz_btm_idx_on_ref_row = max(rpd_calc.index_greater_than(mz_btm, self.ref_mz_list()) - 1, 0)
+        mz_top_idx_on_ref_row = min(rpd_calc.index_greater_than(mz_top, self.ref_mz_list())    , self.mz_set.shape[1] - 1)
+        # 基準となる idx を元に、（予め計算しておいた mz_ref_info_for... に基づいて）探索範囲の idx を取得する
+        mz_btm_idx = self.mz_set_info_for_chromatogram_extraction[0, mz_btm_idx_on_ref_row]
+        mz_top_idx = self.mz_set_info_for_chromatogram_extraction[1, mz_top_idx_on_ref_row]
+        # extracted_mz_set = self.mz_set[:, mz_btm_idx:mz_top_idx + 1]
+        extracted_inten_set = self.inten_set[:, mz_btm_idx:mz_top_idx + 1]
+        inten_list = np.nansum(extracted_inten_set, axis=1)
         return (self.RT_list, inten_list), self.extract_chromatogram_b4_deisotoping(mz_btm, mz_top)
     # @staticmethod
     # def extract_chromatogram_core(mz_btm, mz_top, mz_set, inten_set):
@@ -107,8 +134,8 @@ class RPD():
     #     return inten_list
     def extract_chromatogram_core_with_cython(self, mz_btm, mz_top):
         # self.ref_row において、基準となる idx を求める
-        mz_btm_idx_on_ref_row = max(rpd_calc.index_greater_than(mz_btm, self.mz_set[self.ref_row]) - 1, 0)
-        mz_top_idx_on_ref_row = min(rpd_calc.index_greater_than(mz_top, self.mz_set[self.ref_row])    , self.mz_set.shape[1] - 1)
+        mz_btm_idx_on_ref_row = max(rpd_calc.index_greater_than(mz_btm, self.ref_mz_list()) - 1, 0)
+        mz_top_idx_on_ref_row = min(rpd_calc.index_greater_than(mz_top, self.ref_mz_list())    , self.mz_set.shape[1] - 1)
         # 基準となる idx を元に、（予め計算しておいた mz_ref_info_for... に基づいて）探索範囲の idx を取得する
         mz_btm_idx = self.mz_set_info_for_chromatogram_extraction[0, mz_btm_idx_on_ref_row]
         mz_top_idx = self.mz_set_info_for_chromatogram_extraction[1, mz_top_idx_on_ref_row]
@@ -120,11 +147,16 @@ class RPD():
         return inten_list
     def extract_chromatogram_b4_deisotoping(self, mz_btm, mz_top):
         return self.inten_info_set_list_b4_deisotoping.extract_as_chromatogram(mz_btm, mz_top)
-
     def extract_spectrum(self, RT_btm, RT_top):
         RT_idx_btm = rpd_calc.index_greater_than(threshold=RT_btm, array1d=self.RT_list)
         RT_idx_top = rpd_calc.index_greater_than(threshold=RT_top, array1d=self.RT_list)
         return self.extract_spectrum_default(RT_idx_btm, RT_idx_top), self.extract_spectrum_b4_deisotoping(RT_idx_btm, RT_idx_top)
+    def extract_spectrum_fast(self, RT_btm, RT_top):
+        RT_idx_btm = rpd_calc.index_greater_than(threshold=RT_btm, array1d=self.RT_list)
+        RT_idx_top = rpd_calc.index_greater_than(threshold=RT_top, array1d=self.RT_list)
+        inten_set = self.inten_set[RT_idx_btm:RT_idx_top]
+        mz_set = self.mz_set[RT_idx_btm:RT_idx_top]
+        return (mz_set.mean(axis=0), inten_set.mean(axis=0)), self.extract_spectrum_b4_deisotoping(RT_idx_btm, RT_idx_top)
     def extract_spectrum_default(self, RT_idx_btm, RT_idx_top):
         # extract data
         inten_set = self.inten_set[RT_idx_btm:RT_idx_top]
@@ -188,7 +220,7 @@ class RPD():
         return ((y_list[1:] + y_list[:-1]) * np.diff(x_list)).sum() / 2
     def set_deisotoping(self, deisotoping):
         # clear previous deisotoping
-        if len(self.inten_info_set_list_b4_deisotoping) > 0:
+        if not self.inten_info_set_list_b4_deisotoping.is_empty():
             self.clear_deisotoping()
         # set deisotoping
         for i in range(deisotoping.count()):
@@ -198,47 +230,58 @@ class RPD():
             mz_btm = relative_atomic_mass_list[0] - data_item.mz_range
             mz_top = relative_atomic_mass_list[-1] + data_item.mz_range
             # RT で回す
-            inten_info_set = IntenInfoSet()
             for RT_idx in range(RT_idx_btm, RT_idx_top):
                 mz_idx_btm = rpd_calc.index_greater_than(threshold=mz_btm, array1d=self.mz_set[RT_idx, :])
                 mz_idx_top = rpd_calc.index_greater_than(threshold=mz_top, array1d=self.mz_set[RT_idx, :])
                 target_mz_list = self.mz_set[RT_idx, mz_idx_btm:mz_idx_top]
                 target_inten_list = self.inten_set[RT_idx, mz_idx_btm:mz_idx_top]
                 # store original values
-                inten_info_set.append(RT_idx, mz_idx_btm, mz_idx_top, self.RT_list[RT_idx], target_mz_list, np.copy(target_inten_list))
+                self.inten_info_set_list_b4_deisotoping.update_data(RT_idx, self.RT_list[RT_idx], mz_idx_btm, mz_idx_top, target_mz_list, np.copy(target_inten_list))
                 # execute deisotoping
                 diso.deisotope_core(target_mz_list, target_inten_list, relative_atomic_mass_list, isotopic_composition_list)
-            # 追加
-            self.inten_info_set_list_b4_deisotoping.append(inten_info_set)
     def clear_deisotoping(self):
         self.inten_set[~np.isnan(self.inten_info_set_list_b4_deisotoping)] = self.inten_info_set_list_b4_deisotoping[~np.isnan(self.inten_info_set_list_b4_deisotoping)].astype(self.inten_set.dtype)
-        self.inten_info_set_list_b4_deisotoping = IntenInfoSetList()
+        self.inten_info_set_list_b4_deisotoping = IntenInfoSetList(len(self.RT_list))
 
 class IntenInfoSetList(list):
-    # order in the list DOES MATTER (RPD.clear_deisotoping するときは、入れたものと逆順で戻さないと完全には元に戻らない)
-    def append(self, inten_info_set):
-        return super().append(inten_info_set)
+    def __init__(self, N_RT):
+        super().__init__([None for i in range(N_RT)])
+    def is_empty(self):
+        for inten_list_info in self:
+            if inten_list_info is not None:
+                return False
+        else:
+            return True            
+    def update_data(self, RT_idx, RT, mz_idx_btm, mz_idx_top, mz_list, inten_list):
+        inten_list_info = self[RT_idx]
+        if inten_list_info is None:
+            self[RT_idx] = IntenListInfo(RT, mz_idx_btm, mz_idx_top, mz_list, inten_list)
+        else:
+            inten_list_info.update_data(mz_idx_btm, mz_idx_top, mz_list, inten_list)
+
     def extract_as_spectrum(self, RT_idx_btm, RT_idx_top):
         # get target data
         mz_list = []
         inten_list = []
-        for inten_info_set in self:
-            spectrum = inten_info_set.extract_spectrum(RT_idx_btm, RT_idx_top)   # 平均計算済
-            if spectrum is not None:
-                mz_list.extend(spectrum[0])
-                inten_list.extend(spectrum[1])
-                mz_list.append(np.nan)
-                inten_list.append(np.nan)
+        N_RT = 0
+        for inten_list_info in self[RT_idx_btm:RT_idx_top]:
+            if inten_list_info is None:
+                continue
+            mz_list.extend(inten_list_info.mz_list)
+            inten_list.extend(inten_list_info.inten_list)
+            N_RT += 1
+        mz_list, inten_list = RPD.calc_mz_inten_list_average(np.array(mz_list), np.array(inten_list), N_RT)
         return mz_list, inten_list
     def extract_as_chromatogram(self, mz_btm, mz_top):
         RT_list = []
         inten_list = []
-        for inten_info_set in self:
-            chromatogram = inten_info_set.extract_chromatogram(mz_btm, mz_top)
-            RT_list.extend(chromatogram[0])
-            inten_list.extend(chromatogram[1])
-            RT_list.append(np.nan)
-            inten_list.append(np.nan)
+        for inten_list_info in self:
+            if inten_list_info is None:
+                RT_list.append(np.nan)
+                inten_list.append(np.nan)
+            else:
+                RT_list.append(inten_list_info.RT)
+                inten_list.append(inten_list_info.extract_chromatogram_value(mz_btm, mz_top))
         return RT_list, inten_list
 
 class IntenInfoSet(list):
@@ -264,16 +307,29 @@ class IntenInfoSet(list):
                 inten_list.append(inten_info_list.extract_chromatogram_value(mz_btm, mz_top))
         return np.array(RT_list), np.array(inten_list)
 
-class IntenInfoList():
-    def __init__(self, RT_idx, mz_idx_btm, mz_idx_top, RT, target_mz_list, target_inten_list):
-        self.RT_idx = RT_idx
-        self.mz_idx_btm = mz_idx_btm
-        self.mz_idx_top = mz_idx_top
+class IntenListInfo():
+    def __init__(self, RT, mz_idx_btm, mz_idx_top, mz_list, inten_list):
         self.RT = RT
-        self.target_mz_list = target_mz_list
-        self.target_inten_list = target_inten_list
+        self.mz_idx_list = np.arange(mz_idx_btm, mz_idx_top)
+        self.mz_list = mz_list
+        self.inten_list = inten_list
     def extract_chromatogram_value(self, mz_btm, mz_top):
-        return self.target_inten_list[np.logical_and(mz_btm <= self.target_mz_list, self.target_mz_list <= mz_top)].sum()
+        loc = np.logical_and(mz_btm <= self.mz_list, self.mz_list <= mz_top)
+        if loc.any():
+            return self.inten_list[loc].sum()
+        else:
+            return np.nan
+    def update_data(self, mz_idx_btm, mz_idx_top, mz_list, inten_list):
+        # only mz_idx that does not exist in self.mz_idx_ist will be inserted.
+        mz_idx_list_new = np.arange(mz_idx_btm, mz_idx_top)
+        idx_list_for_extraction = [i for i, mz_idx in enumerate(mz_idx_list_new) if mz_idx not in self.mz_idx_list]
+        # get insertion_idx
+        extracted_mz_idx_list = mz_idx_list_new[idx_list_for_extraction]
+        insertion_idx = np.searchsorted(self.mz_idx_list, extracted_mz_idx_list)
+        # insert
+        self.mz_idx_list = np.insert(self.mz_idx_list, insertion_idx, extracted_mz_idx_list)
+        self.mz_list = np.insert(self.mz_list, insertion_idx, mz_list[idx_list_for_extraction])
+        self.inten_list = np.insert(self.inten_list, insertion_idx, inten_list[idx_list_for_extraction])
 
 class Info():
     def __init__(self, rpd) -> None:

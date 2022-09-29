@@ -162,12 +162,12 @@ class ExpoDoubleSpinBox(QWidget):
         self.box_exp.valueChanged.connect(self.valueChanged_exp)
     def setValue(self, v):
         if v != 0:
-            exp = np.floor(np.log10(abs(v))).astype(int)
+            exp = np.floor(np.log10(abs(v))).astype(int).astype(float)
             value = v / (10 ** exp)
         else:
             exp = 0
             value = 0
-        self.box_exp.setValue(exp)
+        self.box_exp.setValue(int(exp))
         self.box_value.setValue(value)
     def valueChanged_value(self, value):
         self.valueChanged.emit(value * 10 ** self.box_exp.value())

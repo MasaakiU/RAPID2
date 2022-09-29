@@ -1,22 +1,33 @@
 # -*- coding: utf-8 -*-
 
+import fractions
 import numpy as np
-from functools import partial
 import xml.etree.ElementTree as ET
 
-from PyQt6.QtGui import (
-    QPen, 
+from PyQt6.QtWidgets import (
+    QWidget, 
+    QHBoxLayout, 
 )
+
 from PyQt6.QtCore import (
     Qt, 
     pyqtSignal, 
+    QRectF, 
 )
+from PyQt6.QtGui import (
+    QLinearGradient, 
+    QColor, 
+    QBrush, 
+)
+from . import my_widgets as mw
+from PyQt6.QtWidgets import QSizePolicy
 import pyqtgraph as pg
 from pyqtgraph import Point
 from pyqtgraph import functions as fn
 from pyqtgraph.exporters import SVGExporter
+from pyqtgraph.graphicsItems import GradientEditorItem
 
-from pyqtgraph.Qt import QtGui, QtCore
+from pyqtgraph.Qt import QtGui
 import numpy as np
 from pyqtgraph.Point import Point
 from pyqtgraph import debug as debug
@@ -86,61 +97,27 @@ class MyPlotItem(pg.PlotItem):
         return x_min, x_max
     def setXRange(self, x_min, x_max, padding):
         super().setXRange(x_min, x_max, padding=padding)
+    def setYRange(self, y_min, y_max, padding):
+        super().setYRange(y_min, y_max, padding=padding)
     def viewRange_x(self):
         return self.viewRange()[0]
     def viewRange_y(self):
         return self.viewRange()[1]
 
-class MyPlotWidget(pg.PlotWidget):
-    left_axis_width = 40
+class MyPlotWidgetBase(pg.PlotWidget):
     view_box_clicked = pyqtSignal(float, float)
-    def __init__(self):
-        exp_axisitem = ExpAxisItem(orientation='left', maxTickLength=5)
-        exp_axisitem.setWidth(w=self.left_axis_width)
-        RT_axisitem = pg.AxisItem(orientation='bottom', maxTickLength=5)
-        plot_item = MyPlotItem(viewBox=MyViewBox(), axisItems={'left':exp_axisitem, 'bottom':RT_axisitem})
+    def __init__(self, plot_item):
         super().__init__(plotItem=plot_item)
         # 設定
         self.vb().setMouseMode(pg.ViewBox.RectMode)
         self.disableAutoRange(axis="xy")
-        # items
-        self.plot0 = MyPlotDataItem()
-        self.plot1 = MyPlotDataItem()
-        self.region0 = pg.LinearRegionItem(pen=style.main_r_pen(), brush=style.main_r_brush())
-        # add items
-        self.addItem(self.plot0)
-        self.addItem(self.plot1)
-        self.addItem(self.region0)
-        # order
-        self.plot0.setZValue(2)
-
-        # 情報表示用テキストボックス
-        exp_axisitem.exp_item.setParentItem(self.vb())
-        self.top_right_label = pg.TextItem(anchor=(1, 0), html=make_label_html())
-        self.top_right_label.setParentItem(self.vb())
         # イベントコネクト
         self.vb().view_box_clicked.connect(lambda x, y: self.view_box_clicked.emit(x, y))
-        self.vb().sigResized.connect(self.vb_resized)
-
-    #####
     def vb(self):
         return self.plotItem.vb
     # disable wheel event (event will be passed to QScrollArea)
     def wheelEvent(self, ev, axis=None):
         self.parent().parent().parent().wheelEvent(ev)
-    def get_x_bounds_plot0(self):
-        return np.nanmin(self.plot0.xData), np.nanmax(self.plot0.xData)
-    def get_y_bounds_plot0(self):
-        return np.nanmin(self.plot0.yData), np.nanmax(self.plot0.yData)
-    def get_displayed_y_bounds_plot0(self, x_min, x_max):
-        return self.get_local_minmax(self.plot0.xData, self.plot0.yData, x_min, x_max)
-    def setMyYRange_within_x_view_range(self):
-        x_view_range, y_view_range = self.viewRange()
-        y_min, y_max = self.get_displayed_y_bounds_plot0(*x_view_range)
-        if y_min is None:
-            return
-        else:
-            self.setMyYRange(y_min, y_max)
     @staticmethod
     def get_local_minmax(x_list, y_list, min_x, max_x):
         if x_list is None:
@@ -166,6 +143,88 @@ class MyPlotWidget(pg.PlotWidget):
         # 上書き保存
         tree = ET.ElementTree(element=svg)
         tree.write(save_path, encoding='utf-8', xml_declaration=True)
+
+class MyImageWidget(MyPlotWidgetBase):
+    left_axis_width = 50
+    def __init__(self):
+        exp_axisitem = pg.AxisItem(orientation='left', maxTickLength=5)
+        exp_axisitem.setWidth(w=self.left_axis_width)
+        RT_axisitem = pg.AxisItem(orientation='bottom', maxTickLength=5)
+        plot_item = MyPlotItem(viewBox=MyViewBox(), axisItems={'left':exp_axisitem, 'bottom':RT_axisitem})
+        super().__init__(plot_item)
+        # items
+        self.image0 = pg.ImageItem()
+        self.histogram0 = MyHistogramLUTWidget(orientation="horizontal")
+        # connect image and histogram
+        self.histogram0.setImageItem(self.image0)
+        # add item
+        self.addItem(self.image0)
+    def set_image(self, img):
+        self.image0.setImage(np.rot90(img, -1))
+    def set_range_of_image(self, x_range, y_range):
+        N_x_pixel, N_y_pixel = self.image0.image.shape
+        x_scale = (x_range[1] - x_range[0]) / N_x_pixel # scale=length_on_axis/pixel
+        y_scale = (y_range[1] - y_range[0]) / N_y_pixel # scale=length_on_axis/pixel
+        tr = QtGui.QTransform()  # prepare ImageItem transformation:
+        tr.translate(x_range[0], y_range[0]) # move image
+        tr.scale(x_scale, y_scale)       # (horizontal, vertical)
+        self.image0.setTransform(tr) # assign transform
+    def get_intensity_min_max(self):
+        # shape
+        x_view_range, y_view_range = self.vb().viewRange()
+        # 平行移動、拡大移動の値
+        x_translate = self.image0.transform().dx()
+        y_translate = self.image0.transform().dy()
+        x_scale = self.image0.transform().m11()
+        y_scale = self.image0.transform().m22()
+        # 画像のピクセル上での位置
+        x_pixel_view_range = ((np.array(x_view_range) - x_translate) / x_scale).astype(int)
+        y_pixel_view_range = ((np.array(y_view_range) - y_translate) / y_scale).astype(int)
+        target_pixel = self.image0.image[max(x_pixel_view_range[0], 0):x_pixel_view_range[-1] + 1, max(y_pixel_view_range[0], 0):y_pixel_view_range[-1] + 1]
+        # 最大値・最小値を返す
+        return target_pixel.min(), target_pixel.max()
+    def set_contrast(self, inten_min, inten_max):
+        self.image0.setLevels((inten_min, inten_max))
+
+class MyPlotWidget(MyPlotWidgetBase):
+    left_axis_width = 40
+    def __init__(self):
+        exp_axisitem = ExpAxisItem(orientation='left', maxTickLength=5)
+        exp_axisitem.setWidth(w=self.left_axis_width)
+        RT_axisitem = pg.AxisItem(orientation='bottom', maxTickLength=5)
+        plot_item = MyPlotItem(viewBox=MyViewBox(), axisItems={'left':exp_axisitem, 'bottom':RT_axisitem})
+        super().__init__(plot_item=plot_item)
+        # items
+        self.plot0 = MyPlotDataItem()
+        self.plot1 = MyPlotDataItem()
+        self.region0 = pg.LinearRegionItem(pen=style.main_r_pen(), brush=style.main_r_brush())
+        # add items
+        self.addItem(self.plot0)
+        self.addItem(self.plot1)
+        self.addItem(self.region0)
+        # order
+        self.plot0.setZValue(2)
+
+        # 情報表示用テキストボックス
+        exp_axisitem.exp_item.setParentItem(self.vb())
+        self.top_right_label = pg.TextItem(anchor=(1, 0), html=make_label_html())
+        self.top_right_label.setParentItem(self.vb())
+        # イベントコネクト
+        self.vb().sigResized.connect(self.vb_resized)
+
+    def get_x_bounds_plot0(self):
+        return np.nanmin(self.plot0.xData), np.nanmax(self.plot0.xData)
+    def get_y_bounds_plot0(self):
+        return np.nanmin(self.plot0.yData), np.nanmax(self.plot0.yData)
+    def get_displayed_y_bounds_plot0(self, x_min, x_max):
+        return self.get_local_minmax(self.plot0.xData, self.plot0.yData, x_min, x_max)
+    def setMyYRange_within_x_view_range(self):
+        x_view_range, y_view_range = self.viewRange()
+        y_min, y_max = self.get_displayed_y_bounds_plot0(*x_view_range)
+        if y_min is None:
+            return
+        else:
+            self.setMyYRange(y_min, y_max)
     # windowサイズ変更時、テキストボックスの位置を調整する
     def vb_resized(self, vb=None):
         self.top_right_label.setPos(vb.screenGeometry().width(), 0)
@@ -377,7 +436,7 @@ class ExpAxisItem(pg.AxisItem):
                 if s is None:
                     rects.append(None)
                 else:
-                    br = p.boundingRect(QtCore.QRectF(0, 0, 100, 100), QtCore.Qt.AlignmentFlag.AlignCenter, s)
+                    br = p.boundingRect(QRectF(0, 0, 100, 100), Qt.AlignmentFlag.AlignCenter, s)
                     ## boundingRect is usually just a bit too large
                     ## (but this probably depends on per-font metrics?)
                     br.setHeight(br.height() * 0.8)
@@ -420,7 +479,7 @@ class ExpAxisItem(pg.AxisItem):
                 if vstr is None: ## this tick was ignored because it is out of bounds
                     continue
                 x = tickPositions[i][j]
-                #textRect = p.boundingRect(QtCore.QRectF(0, 0, 100, 100), QtCore.Qt.AlignmentFlag.AlignCenter, vstr)
+                #textRect = p.boundingRect(QRectF(0, 0, 100, 100), Qt.AlignmentFlag.AlignCenter, vstr)
                 textRect = rects[j]
                 height = textRect.height()
                 width = textRect.width()
@@ -428,19 +487,19 @@ class ExpAxisItem(pg.AxisItem):
                 offset = max(0,self.style['tickLength']) + textOffset
 
                 if self.orientation == 'left':
-                    alignFlags = QtCore.Qt.AlignmentFlag.AlignRight|QtCore.Qt.AlignmentFlag.AlignVCenter
-                    rect = QtCore.QRectF(tickStop-offset-width, x-(height/2), width, height)
+                    alignFlags = Qt.AlignmentFlag.AlignRight|Qt.AlignmentFlag.AlignVCenter
+                    rect = QRectF(tickStop-offset-width, x-(height/2), width, height)
                 elif self.orientation == 'right':
-                    alignFlags = QtCore.Qt.AlignmentFlag.AlignLeft|QtCore.Qt.AlignmentFlag.AlignVCenter
-                    rect = QtCore.QRectF(tickStop+offset, x-(height/2), width, height)
+                    alignFlags = Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignVCenter
+                    rect = QRectF(tickStop+offset, x-(height/2), width, height)
                 elif self.orientation == 'top':
-                    alignFlags = QtCore.Qt.AlignmentFlag.AlignHCenter|QtCore.Qt.AlignmentFlag.AlignBottom
-                    rect = QtCore.QRectF(x-width/2., tickStop-offset-height, width, height)
+                    alignFlags = Qt.AlignmentFlag.AlignHCenter|Qt.AlignmentFlag.AlignBottom
+                    rect = QRectF(x-width/2., tickStop-offset-height, width, height)
                 elif self.orientation == 'bottom':
-                    alignFlags = QtCore.Qt.AlignmentFlag.AlignHCenter|QtCore.Qt.AlignmentFlag.AlignTop
-                    rect = QtCore.QRectF(x-width/2., tickStop+offset, width, height)
+                    alignFlags = Qt.AlignmentFlag.AlignHCenter|Qt.AlignmentFlag.AlignTop
+                    rect = QRectF(x-width/2., tickStop+offset, width, height)
 
-                textFlags = alignFlags | QtCore.Qt.TextFlag.TextDontClip    
+                textFlags = alignFlags | Qt.TextFlag.TextDontClip    
                 #p.setPen(self.pen())
                 #p.drawText(rect, textFlags, vstr)
                 textSpecs.append((rect, textFlags, vstr))
@@ -470,5 +529,111 @@ class ExpAxisItem(pg.AxisItem):
         return list(map(lambda v: str(np.round(v / (10 ** self.exp), 1)), values))
     def exp_changed(self, exp):
         self.exp_item.setHtml(make_label_html(f"e{int(exp)}"))
+
+class MyGradientWidget(mw.PaintableQWidget):
+    gradient_bar_height = 15
+    gradient_changed = pyqtSignal(object)
+    def __init__(self, *args, **kargs):
+        super().__init__(*args, **kargs)
+        self.setStyleSheet("MyGradientWidget{border-width:1px; border-style:solid; border-color:black; background-color:black}")
+        # アイテム
+        self.gradient_bar = QWidget()
+        self.gradient_bar.setAutoFillBackground(True)
+        # レイアウト
+        self.setLayout(QHBoxLayout())
+        self.layout().setContentsMargins(1,1,1,1)
+        self.layout().addWidget(self.gradient_bar)
+        # 初期化
+        self.set_gradient(default_gradient_info)
+    def set_gradient(self, gradient_info):
+        # カラーモードなど
+        if isinstance(gradient_info, str):
+            gradient_info = GradientEditorItem.Gradients[gradient_info]
+        color_mode = gradient_info["mode"]
+        # パレット準備
+        p = self.gradient_bar.palette()
+        gradient = QLinearGradient(0, 0, 1, 0)# QPointF(0, 0), QPointF(20, 0))
+        gradient.setCoordinateMode(gradient.CoordinateMode.ObjectMode)
+        for tick, color_values in gradient_info["ticks"]:
+            if color_mode == "rgb":
+                gradient.setColorAt(tick, QColor(*color_values))
+            else:
+                raise Exception(f"unknown color_mode {color_mode}")
+        p.setBrush(self.gradient_bar.backgroundRole(), QBrush(gradient))#QBrush(gradient))
+        self.gradient_bar.setPalette(p)
+        self.gradient_bar.setFixedHeight(self.gradient_bar_height)
+        # event emit
+        self.gradient_changed.emit(gradient_info)
+
+default_gradient_info = "plasma" # "thermal" # "flame" # "yellowy" # "viridis" # "inferno" # "plasma" # "magma" # {'ticks': [(0.0, (0, 0, 3, 255)), (0.25, (80, 18, 123, 255)), (0.5, (182, 54, 121, 255)), (0.75, (251, 136, 97, 255)), (1.0, (251, 252, 191, 255))], 'mode': 'rgb'}
+
+class MyGradientGraph(pg.PlotWidget):
+    fixed_height = 50
+    sig_region_changed = pyqtSignal(float, float)
+    sig_region_change_finished = pyqtSignal(float, float)
+    def __init__(self, parent=None, background='default', plotItem=None, **kargs):
+        super().__init__(parent, background, plotItem, **kargs)
+        self.plotItem.hideAxis('left')
+        self.setFixedHeight(self.fixed_height)
+        self.region0 = pg.LinearRegionItem(values=[0, 0], orientation="vertical")
+        self.addItem(self.region0)
+        # イベントコネクト
+        self.region0.sigRegionChanged.connect(lambda x: self.sig_region_changed.emit(*self.region0.getRegion()))
+        self.region0.sigRegionChangeFinished.connect(lambda x: self.sig_region_change_finished.emit(*self.region0.getRegion()))
+    def setEnabled(self, enable):
+        self.region0.setMovable(enable)
+    def setValue(self, contrast):
+        self.region0.setRegion(contrast)
+    def adjust_view_range(self):
+        btm, top = self.region0.getRegion()
+        d = top - btm
+        self.setXRange(btm - d / 2, top + d / 2, padding=0)
+
+class MyHistogramLUTWidget(pg.HistogramLUTWidget):
+    def __init__(self, parent=None, *args, **kargs):
+        self.ignore_event = False
+        super().__init__(parent, *args, **kargs)
+        assert self.levelMode == "mono"
+        self.init_ticks()
+        # items
+        self.min_level = pg.SpinBox()
+        self.min_level.setOpts(finite=True)
+        self.max_level = pg.SpinBox()
+        self.max_level.setOpts(finite=True)
+
+
+        # gradient = "grey"
+        self.load_gradient(default_gradient_info)
+
+        # イベントコネクト
+        self.regions[0].sigRegionChanged.connect(self.histogram_level_changed)
+    # methods related to complicated events
+    def event_process_deco(func):
+        def wrapper(self, *keys, **kwargs):
+            if self.ignore_event:
+                return
+            self.ignore_event = True
+            res = func(self, *keys, **kwargs)
+            self.ignore_event = False
+            return res
+        return wrapper
+    def init_ticks(self):
+        for tick in self.gradient.ticks:
+            tick.movable = False
+            tick.pen = pg.mkPen({"color":"#000000"})
+            tick.hoverPen = pg.mkPen({"color":"#000000"})
+            tick.currentPen = pg.mkPen({"color":"#000000"})
+            tick.update()
+    def load_gradient(self, gradient):
+        if isinstance(gradient, str):
+            self.gradient.loadPreset(gradient)
+        elif isinstance(gradient, dict):
+            self.gradient.restoreState(gradient)
+        self.init_ticks()
+
+    @event_process_deco
+    def histogram_level_changed(self, region_item):
+        level = region_item.getRegion()
+        print(level)
 
 

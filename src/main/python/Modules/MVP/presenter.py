@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from curses import window
 import pandas as pd
 import shutil
 import numpy as np
@@ -25,6 +26,8 @@ from PyQt6.QtCore import (
 
 from .. import general_functions as gf
 from ..widgets import popups
+from ..widgets import mz_RT_image2d as mri
+from ..widgets import data_window as dw
 from ..process import convert_open as co
 from ..process import deisotoping as diso
 
@@ -44,14 +47,17 @@ class Presenter():
         self.data_area().spectrum_layout.range_change_finished.connect(self.mz_range_chanage_finished)
         self.data_area().spectrum_layout.range_changed.connect(self.mz_range_chanaged)
         self.data_area().spectrum_layout.view_range_changed.connect(self.s_view_range_chanaged)
+        self.data_area().mz_RT_image_layout.view_range_changed.connect(self.i_view_range_changed)
         self.navigation_bar().mz_related_box_changed.connect(self.mz_related_box_changed)
         self.navigation_bar().RT_related_box_changed.connect(self.RT_related_box_changed)
         self.navigation_bar().btn_status_changed_s.connect(self.btn_status_changed_s)
         self.navigation_bar().btn_status_changed_c.connect(self.btn_status_changed_c)
+        self.navigation_bar().btn_status_changed_i.connect(self.btn_status_changed_i)
         self.view_range_settings().view_range_changed_s_x.connect(lambda x_min, x_max: self.set_x_view_range_from_settings_s(x_min, x_max))
         self.view_range_settings().view_range_changed_c_x.connect(lambda x_min, x_max: self.set_x_view_range_from_settings_c(x_min, x_max))
         self.view_range_settings().view_range_changed_s_y.connect(lambda y_min, y_max: self.set_y_view_range_from_settings_s(y_min, y_max))
         self.view_range_settings().view_range_changed_c_y.connect(lambda y_min, y_max: self.set_y_view_range_from_settings_c(y_min, y_max))
+        self.view_range_settings().contrast_changed_i.connect(lambda contrast_min, contrast_max: self.set_contrast_range_from_settings_i(contrast_min, contrast_max))
         self.compound_navigator().add_compound_clicked.connect(self.add_compound_clicked)
         self.compound_navigator().del_compound_clicked.connect(self.del_compound_clicked)
         self.compound_widget().new_compound_selected.connect(self.new_compound_selected)
@@ -141,6 +147,33 @@ class Presenter():
         dir_path.mkdir()
         # save svg
         self.central_widget().export_svg(dir_path, include_mz_RT_labels, include_mz_RT_regions, plus_minus_style)
+    def generate_mz_RT_Image2D(self):
+        self.ofc = mri.OpenedFilesCheckbox(self.model().rpd_list)
+        self.ofc.show()
+        self.ofc.btn_ok_clicked.connect(self.show_mz_RT_image2d)
+        self.ofc.btn_cancel_clicked.connect(self.close_mz_RT_image2d)
+    def show_mz_RT_image2d(self, rpd_list):
+        mz_view_x_range, mz_view_y_range = self.data_area().get_view_range_s(ref_index=0)
+        RT_view_x_range, RT_view_y_range  = self.data_area().get_view_range_c(ref_index=0)
+
+        self.mz_RT_images2d = {}
+        for rpd in rpd_list:
+            img = rpd.extract_mz_RT_2d_image(mz_view_x_range, RT_view_x_range)  # shape = (len(RT), len(mz))
+            img = np.rot90(img, 1)
+
+        # for rpd in range(1):
+        #     img = np.random.randn(200, 300)
+
+            mri_window = mri.MzRTImage2D(window_title="TEST")#rpd.file_path.stem)
+            mri_window.set_image(img, x_range=RT_view_x_range, y_range=mz_view_x_range)
+            self.mz_RT_images2d[rpd] = mri_window
+            self.mz_RT_images2d[rpd].show()
+    def close_mz_RT_image2d(self):
+        self.ofc.close()
+        if not hasattr(self, "mz_RT_images2d"):
+            return
+        for rpd, mz_RT_image2d in self.mz_RT_images2d.items():
+            mz_RT_image2d.close()
     # methods related to complicated events
     def event_process_deco(func):
         def wrapper(self, *keys, **kwargs):
@@ -209,6 +242,7 @@ class Presenter():
         self.data_area().set_spectrum_window_type(info.spectrum_type, index=-1)
         self.data_area().update_chromatogram(chromatogram, index=-1)
         self.data_area().update_spectrum(spectrum, index=-1)
+        self.data_area().update_mz_RT_image(rpd, index=-1)
         self.data_area().update_info(info, index=-1)
         # region items on the graphs
         self.data_area().update_RT_region(RT_btm, RT_top, index=-1)
@@ -235,6 +269,7 @@ class Presenter():
             # view_range_settings
             self.update_view_range_settings_s_y(y_scale_status_s)
             self.update_view_range_settings_c_y(y_scale_status_c)
+        self.update_view_range_settings_contrast()
     def set_view_range_clicked(self):
         self.view_range_settings().show()
         # self.view_range_settings.raise_()
@@ -356,6 +391,7 @@ class Presenter():
         self.set_view_range_c_y_by_y_scale_status(y_scale_status_c, ref_index=ref_index)
         # view_range_settings
         self.update_view_range_settings_c_y(y_scale_status_c)
+        self.update_view_range_settings_contrast()
     @event_process_deco
     def s_view_range_chanaged(self, spectrum_window):
         ref_index = self.data_area().spectrum_layout.get_window_index(spectrum_window)
@@ -365,6 +401,20 @@ class Presenter():
         self.set_view_range_s_y_by_y_scale_status(y_scale_status_s, ref_index=ref_index)
         # view_range_settings
         self.update_view_range_settings_s_y(y_scale_status_s)
+        self.update_view_range_settings_contrast()
+    @event_process_deco
+    def i_view_range_changed(self, mz_RT_image_window: dw.MzRTImageWindow):
+        view_range_c_x, view_range_s_x = mz_RT_image_window.viewRange()
+        self.data_area().set_view_range_i_RT(*view_range_c_x)
+        self.data_area().set_view_range_i_mz(*view_range_s_x)
+        self.data_area().set_view_range_c_x(*view_range_c_x)
+        self.data_area().set_view_range_s_x(*view_range_s_x)
+        self.view_range_settings().set_values_c_x(view_range_c_x)
+        self.view_range_settings().set_values_s_x(view_range_s_x)
+        self.update_view_range_settings_contrast()
+        self.ignore_event = False
+        self.set_view_range_c_y_by_y_scale_status(y_scale_status=self.navigation_bar().get_y_scale_status_c(), ref_index=0)
+        self.set_view_range_s_y_by_y_scale_status(y_scale_status=self.navigation_bar().get_y_scale_status_s(), ref_index=0)
     # from navigation bar
     @event_process_deco
     def RT_related_box_changed(self, RT, RT_range):
@@ -456,24 +506,34 @@ class Presenter():
         self.set_view_range_c_y_by_y_scale_status(y_scale_status_c.replace("L1A0", "L1A1"), ref_index=None)
         # view_range_settings
         self.update_view_range_settings_c_y(y_scale_status_c)
+    @event_process_deco
+    def btn_status_changed_i(self, btn_type, is_checked):
+        if btn_type == "contrast_i":
+            pass
+        elif btn_type == "reset_XY_range_i":
+            pass
     # methods to set view range
     @event_process_deco
     def autorange_all_xy_c(self):
         view_range_c_x, view_range_c_y = self.data_area().autorange_c_all()
+        self.data_area().set_view_range_i_RT(*view_range_c_x)
         self.ignore_event = False
         self.set_values_of_view_range_settings_c(view_range_c_x, view_range_c_y)
     @event_process_deco
     def autorange_all_xy_s(self):
         view_range_s_x, view_range_s_y = self.data_area().autorange_s_all()
+        self.data_area().set_view_range_i_mz(*view_range_s_x)
         self.ignore_event = False
         self.set_values_of_view_range_settings_s(view_range_s_x, view_range_s_y)
     @event_process_deco
     def set_view_range_s_x_all(self, ref_index):
         view_range_s_x = self.data_area().set_view_range_s_x_all(ref_index=ref_index)
+        self.data_area().set_view_range_i_mz(*view_range_s_x)
         self.view_range_settings().set_values_s_x(view_range_s_x)
     @event_process_deco
     def set_view_range_c_x_all(self, ref_index):
         view_range_c_x = self.data_area().set_view_range_c_x_all(ref_index=ref_index)
+        self.data_area().set_view_range_i_RT(*view_range_c_x)
         self.view_range_settings().set_values_c_x(view_range_c_x)
     @event_process_deco
     def set_view_range_s_y_by_y_scale_status(self, y_scale_status, ref_index):
@@ -512,6 +572,15 @@ class Presenter():
         if enable:
             self.ignore_event = False
             self.update_view_range_settings_c_y(y_scale_status_c)
+    def update_view_range_settings_contrast(self):
+        contrast_status_i = self.navigation_bar().get_contrast_status_i()
+        if contrast_status_i == "auto":
+            contrast = self.data_area().set_image_contrast_auto()
+        elif contrast_status_i == "manual":
+            pass
+        else:
+            raise Exception(f"unknown contrast_status_i {contrast_status_i}")
+        self.view_range_settings().set_values_contrast(contrast)
     @event_process_deco
     def set_values_of_view_range_settings_s(self, view_range_s_x, view_range_s_y):
         self.view_range_settings().set_values_s_x(view_range_s_x)
@@ -523,6 +592,7 @@ class Presenter():
     @event_process_deco
     def set_x_view_range_from_settings_s(self, x_min, x_max):
         self.data_area().set_view_range_s_x(x_min, x_max)
+        self.data_area().set_view_range_i_mz(x_min, x_max)
         self.ignore_event = False
         self.set_view_range_s_y_by_y_scale_status(y_scale_status=self.navigation_bar().get_y_scale_status_s(), ref_index=0)
         # change target settings
@@ -530,6 +600,7 @@ class Presenter():
     @event_process_deco
     def set_x_view_range_from_settings_c(self, x_min, x_max):
         self.data_area().set_view_range_c_x(x_min, x_max)
+        self.data_area().set_view_range_i_RT(x_min, x_max)
         self.ignore_event = False
         self.set_view_range_c_y_by_y_scale_status(y_scale_status=self.navigation_bar().get_y_scale_status_c(), ref_index=0)
         # change target settings
@@ -540,6 +611,9 @@ class Presenter():
     @event_process_deco
     def set_y_view_range_from_settings_c(self, y_min, y_max):
         self.data_area().set_view_range_c_y(y_min, y_max)
+    @event_process_deco
+    def set_contrast_range_from_settings_i(self, contrast_min, contrast_max):
+        self.data_area().set_image_contrast(contrast_min, contrast_max)
     @event_process_deco
     def update_view_range_settings_s_y(self, y_scale_status_s):
         if y_scale_status_s == "L1A0_s":
@@ -593,6 +667,8 @@ class Presenter():
         self.view_range_settings().set_values_s_x(data_item.view_range_s_x)
         self.data_area().set_view_range_c_x(*data_item.view_range_c_x)
         self.data_area().set_view_range_s_x(*data_item.view_range_s_x)
+        self.data_area().set_view_range_i_RT(*data_item.view_range_c_x)
+        self.data_area().set_view_range_i_mz(*data_item.view_range_s_x)
         # update data
         self.ignore_event = False
         self.RT_related_box_changed(RT=data_item.RT, RT_range=data_item.RT_range)

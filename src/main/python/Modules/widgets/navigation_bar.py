@@ -31,8 +31,10 @@ class NavigationBar(QWidget):
     RT_related_box_changed = pyqtSignal(float, float)   # RT, RT_range
     btn_status_changed_s = pyqtSignal(str, bool)
     btn_status_changed_c = pyqtSignal(str, bool)
+    btn_status_changed_i = pyqtSignal(str, bool)
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        image_on = kwargs.get("image_on", False)
+        super().__init__()
         # spinbox
         self.mz_box = MzSpinBox()
         self.mz_range_box = MzRangeBox()
@@ -78,6 +80,12 @@ class NavigationBar(QWidget):
         self.btn_autoY_s.setCheckable(True)
         self.btn_linkY_s.setChecked(True)
         self.btn_autoY_s.setChecked(True)
+        # image
+        self.btn_reset_XY_range_i = mw.MyPushButton()
+        self.btn_reset_XY_range_i.setIcons(QIcon(str(gf.settings.btn_icon_path / "up-right-and-down-left-from-center-solid_mod.svg")), QIcon(str(gf.settings.btn_icon_path / "up-right-and-down-left-from-center-solid_mod_white.svg")))
+        self.btn_reset_XY_range_i.setFixedWidth(self.btn_width)
+        self.btn_auto_contrast_i = BtnAutoContrast()
+        self.btn_auto_contrast_i.setChecked(True)
         # disabled (no files to display) or enabled
         self.is_bar_enabled = None
         self.set_bar_enable(False)
@@ -97,7 +105,7 @@ class NavigationBar(QWidget):
         self.layout().addWidget(self.btn_linkY_c)
         self.layout().addWidget(self.btn_autoY_c)
         self.layout().addWidget(self.btn_reset_X_range_c)
-        self.layout().addStretch(1)
+        self.layout().addStretch(2)
         # mz
         self.layout().addWidget(self.btn_TIC)
         self.layout().addWidget(QLabel("m/z:"))
@@ -107,6 +115,12 @@ class NavigationBar(QWidget):
         self.layout().addWidget(self.btn_linkY_s)
         self.layout().addWidget(self.btn_autoY_s)
         self.layout().addWidget(self.btn_reset_X_range_s)
+        self.layout().addStretch(2)
+        # mz_RT_image
+        if image_on:
+            self.layout().addWidget(self.btn_reset_XY_range_i)
+            self.layout().addWidget(self.btn_auto_contrast_i)
+            self.layout().addStretch(1)
         # イベントコネクト
         self.mz_box.valueChanged.connect(lambda mz: self.mz_related_box_changed.emit(mz, self.mz_range_box.value()))
         self.RT_box.valueChanged.connect(lambda RT: self.RT_related_box_changed.emit(RT, self.RT_range_box.value()))
@@ -119,7 +133,8 @@ class NavigationBar(QWidget):
         self.btn_autoY_c.clicked.connect(lambda is_checked: self.btn_status_changed_c.emit("autoY_c", is_checked))
         self.btn_reset_X_range_s.clicked.connect(lambda is_checked: self.btn_status_changed_s.emit("reset_X_range_s", is_checked))
         self.btn_reset_X_range_c.clicked.connect(lambda is_checked: self.btn_status_changed_c.emit("reset_X_range_c", is_checked))
-
+        self.btn_reset_XY_range_i.clicked.connect(lambda is_checked: self.btn_status_changed_i.emit("reset_XY_range_i", is_checked))
+        self.btn_auto_contrast_i.clicked.connect(lambda is_checked: self.btn_status_changed_i.emit("auto_contrast_i", is_checked))
     def set_bar_enable(self, enable):
         self.RT_box.setEnabled(enable)
         self.RT_range_box.setEnabled(enable)
@@ -131,6 +146,8 @@ class NavigationBar(QWidget):
         self.btn_reset_X_range_s.setEnabled(enable)
         self.btn_TIC.setEnabled(enable)
         self.enable_mz_related_box(not self.is_TIC())
+        self.btn_reset_XY_range_i.setEnabled(enable)
+        self.btn_auto_contrast_i.setEnabled(enable)
         self.is_bar_enabled = enable
     def enable_mz_related_box(self, enable):
         self.mz_box.setEnabled(enable)
@@ -161,6 +178,19 @@ class NavigationBar(QWidget):
         return f"L{int(self.btn_linkY_s.isChecked())}A{int(self.btn_autoY_s.isChecked())}_s"
     def get_y_scale_status_c(self):
         return f"L{int(self.btn_linkY_c.isChecked())}A{int(self.btn_autoY_c.isChecked())}_c"
+    def get_contrast_status_i(self):
+        if self.btn_auto_contrast_i.isChecked():
+            return "auto" 
+        else:
+            return "manual"
+
+class BtnAutoContrast(mw.MyPushButton):
+    def __init__(self):
+        super().__init__()
+        self.setIcons(QIcon(str(gf.settings.btn_icon_path / "circle-half-stroke-solid.svg")), QIcon(str(gf.settings.btn_icon_path / "circle-half-stroke-solid_white.svg")))
+        self.setFixedWidth(NavigationBar.btn_width)
+        self.setToolTip("auto contrast")
+        self.setCheckable(True)
 
 class BtnTIC(mw.MyPushButton):
     def __init__(self):

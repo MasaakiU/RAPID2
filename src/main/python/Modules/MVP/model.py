@@ -9,11 +9,12 @@ from PyQt6.QtCore import (
 )
 
 class Model():
-    def __init__(self, main_window):
+    def __init__(self, main_window, fast_display):
         self.main_window = main_window
         # the following lists must be synchronyzed
         self.data_hash_list = []
         self.rpd_list = []
+        self.fast_display = fast_display
     def database(self):
         return self.main_window.database
     # you can specify what kind of data you want by *key, **kwargs in the future.
@@ -30,23 +31,35 @@ class Model():
         self.pbar.show()
         chromatograms = []
         for rpd in self.rpd_list:
-            chromatograms.append(rpd.extract_chromatogram(mz_btm, mz_top))
+            if self.fast_display:
+                chromatograms.append(rpd.extract_chromatogram_fast(mz_btm, mz_top))
+            else:
+                chromatograms.append(rpd.extract_chromatogram(mz_btm, mz_top))
             self.pbar.add()
             QCoreApplication.processEvents()
         return chromatograms
     def extract_chromatogram(self, mz_btm, mz_top, index):
-        return self.rpd_list[index].extract_chromatogram(mz_btm, mz_top)
+        if self.fast_display:
+            return self.rpd_list[index].extract_chromatogram_fast(mz_btm, mz_top)
+        else:
+            return self.rpd_list[index].extract_chromatogram(mz_btm, mz_top)
     def extract_spectra(self, RT_btm, RT_top):
         self.pbar = popups.ProgressBar(N_max=len(self.rpd_list), message="Extracting Spectra")
         self.pbar.show()
         spectra = []
         for rpd in self.rpd_list:
-            spectra.append(rpd.extract_spectrum(RT_btm, RT_top))
+            if self.fast_display:
+                spectra.append(rpd.extract_spectrum_fast(RT_btm, RT_top))
+            else:
+                spectra.append(rpd.extract_spectrum(RT_btm, RT_top))
             self.pbar.add()
             QCoreApplication.processEvents()
         return spectra
     def extract_spectrum(self, RT_btm, RT_top, index):
-        return self.rpd_list[index].extract_spectrum(RT_btm, RT_top)
+        if self.fast_display:
+            return self.rpd_list[index].extract_spectrum_fast(RT_btm, RT_top)
+        else:
+            return self.rpd_list[index].extract_spectrum(RT_btm, RT_top)
     def extract_info_all(self):
         return [rpd.extract_info() for rpd in self.rpd_list]
     def extract_info(self, index):

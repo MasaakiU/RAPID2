@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import pandas as pd
+from pathlib import Path
 
 from PyQt6.QtWidgets import (
     QWidget, 
@@ -20,16 +21,21 @@ from .. import general_functions as gf
 class CentralWidget(QWidget):
     navigator_height = 33
     def __init__(self, main_window, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__()
         self.main_window = main_window
+        ############
+        # SETTINGS #
+        ############
+        image_on = kwargs.get("image_on", False)
+
         ###########
         # WIDGETS #
         ###########
-        self.navigation_bar = nb.NavigationBar()
+        self.navigation_bar = nb.NavigationBar(image_on=image_on)
         self.compound_navigator = cw.CompoundNavigator()
         self.compound_widget = cw.CompoundWidget()
-        self.data_area = da.DataArea()
-        self.view_range_settings = popups.ViewRangeSettings()
+        self.data_area = da.DataArea(image_on=image_on)
+        self.view_range_settings = popups.ViewRangeSettings(image_on=image_on)
         #########
         # STYLE #
         #########
@@ -55,7 +61,7 @@ class CentralWidget(QWidget):
     def export_svg(self, dir_path, include_mz_RT_labels, include_mz_RT_regions, plus_minus_style):
         save_path_base_list = []
         dict_records = []
-        for chromatogram_window, spectrum_window, info_window in zip(self.data_area.chromatogram_layout, self.data_area.spectrum_layout, self.data_area.info_layout):
+        for chromatogram_window, spectrum_window, mz_RT_image_window, info_window in zip(self.data_area.chromatogram_layout, self.data_area.spectrum_layout, self.data_area.mz_RT_image_layout, self.data_area.info_layout):
             save_path_base_pre = (dir_path / info_window.info.file_path.name).with_suffix("")
             if save_path_base_pre.suffix == ".mzdata":
                 save_path_base_pre = save_path_base_pre.with_suffix("")
@@ -64,7 +70,7 @@ class CentralWidget(QWidget):
             save_path_base = save_path_base_pre
             while save_path_base in save_path_base_list:
                 i += 1
-                save_path_base = f"{save_path_base_pre}_{i}"
+                save_path_base = Path(f"{save_path_base_pre}_{i}")
             save_path_base_list.append(save_path_base)
             # ラベル情報
             if self.navigation_bar.is_TIC():
@@ -102,8 +108,10 @@ class CentralWidget(QWidget):
             # 保存
             save_path_c = save_path_base.parent / (save_path_base.name + "_c.svg")
             save_path_s = save_path_base.parent / (save_path_base.name + "_s.svg")
+            save_path_i = save_path_base.parent / (save_path_base.name + "_i.svg")
             chromatogram_window.export_svg(save_path_c)
             spectrum_window.export_svg(save_path_s)
+            mz_RT_image_window.export_svg(save_path_i)
             # もとに戻す
             if include_mz_RT_labels[0]:
                 chromatogram_window.set_top_right_label_html("")

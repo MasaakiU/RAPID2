@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from collections import OrderedDict
-from tkinter import font
 from PyQt6.QtCore import (
     QCoreApplication, 
     Qt, 
@@ -31,6 +30,7 @@ from PyQt6.QtGui import (
 
 from .. import general_functions as gf
 from . import my_widgets as mw
+from . import my_plot_widget as mpw
 from . import navigation_bar as nb
 
 class About(QDialog):
@@ -286,8 +286,11 @@ class ViewRangeSettings(QWidget):
     view_range_changed_s_x = pyqtSignal(float, float)
     view_range_changed_c_y = pyqtSignal(float, float)
     view_range_changed_s_y = pyqtSignal(float, float)
-    def __init__(self):
+    contrast_changed_i = pyqtSignal(float, float)
+    def __init__(self, *keys, **kwargs):
+        image_on = kwargs.get("image_on", False)
         super().__init__()
+        self.ignore_event = False
         self.setWindowTitle("View Range Settings")
         # x spinboxes
         self.x_btm_c = nb.RTSpinBox()
@@ -299,6 +302,11 @@ class ViewRangeSettings(QWidget):
         self.y_top_c = mw.ExpoDoubleSpinBox()
         self.y_btm_s = mw.ExpoDoubleSpinBox()
         self.y_top_s = mw.ExpoDoubleSpinBox()
+        # contrast related
+        self.gradient = mpw.MyGradientWidget()
+        self.gradient_top = mw.ExpoDoubleSpinBox()
+        self.gradient_btm = mw.ExpoDoubleSpinBox()
+        self.gradient_graph = mpw.MyGradientGraph()
         # ボタン
         self.btn_close = QPushButton("Close")
         self.btn_close.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -312,19 +320,31 @@ class ViewRangeSettings(QWidget):
         gridlayout.addWidget(QLabel("y"), 2, 0)
         gridlayout.addWidget(self.y_btm_c, 2, 1)
         gridlayout.addWidget(self.y_top_c, 2, 2)
-        gridlayout.addWidget(mw.RichLabel("Spectrum", font_type="boldfont"), 3, 0, 1, -1)
+        gridlayout.addWidget(mw.RichLabel("\nSpectra", font_type="boldfont"), 3, 0, 1, -1)
         gridlayout.addWidget(QLabel("x"), 4, 0)
         gridlayout.addWidget(self.x_btm_s, 4, 1)
         gridlayout.addWidget(self.x_top_s, 4, 2)
         gridlayout.addWidget(QLabel("y"), 5, 0)
         gridlayout.addWidget(self.y_btm_s, 5, 1)
         gridlayout.addWidget(self.y_top_s, 5, 2)
+        image_layout = QGridLayout()
+        image_layout.addWidget(mw.RichLabel("\nm/z-RT Images", font_type="boldfont"), 0, 0, 1, -1)
+        image_layout.addWidget(QLabel("contrast type"), 1, 0)
+        image_layout.addWidget(self.gradient, 2, 0, 1, -1)
+        image_layout.addWidget(QLabel("min"), 3, 0, 1, 1)
+        image_layout.addWidget(self.gradient_btm, 3, 1, 1, 1)
+        image_layout.addWidget(QLabel("\t"), 3, 2, 1, 1)
+        image_layout.addWidget(QLabel("max"), 3, 3, 1, 1)
+        image_layout.addWidget(self.gradient_top, 3, 4, 1, 1)
+        image_layout.addWidget(self.gradient_graph, 4, 0, 1, -1)
         btn_layout = QHBoxLayout()
         btn_layout.addStretch(1)
         btn_layout.addWidget(self.btn_close)
         self.setLayout(QVBoxLayout())
-        self.layout().addWidget(mw.RichLabel("Target graph", font_type="boldfont"))
         self.layout().addLayout(gridlayout)
+        if image_on:
+            self.layout().addLayout(image_layout)
+        self.layout().addStretch(1)
         self.layout().addLayout(btn_layout)
         # イベントコネクト
         self.x_btm_c.valueChanged.connect(lambda v: self.view_range_changed_c_x.emit(v, self.x_top_c.value()))
@@ -335,6 +355,10 @@ class ViewRangeSettings(QWidget):
         self.y_top_c.valueChanged.connect(lambda v: self.view_range_changed_c_y.emit(self.y_btm_c.value(), v))
         self.y_btm_s.valueChanged.connect(lambda v: self.view_range_changed_s_y.emit(v, self.y_top_s.value()))
         self.y_top_s.valueChanged.connect(lambda v: self.view_range_changed_s_y.emit(self.y_btm_s.value(), v))
+        self.gradient_btm.valueChanged.connect(self.gradient_value_changed_from_spingox)
+        self.gradient_top.valueChanged.connect(self.gradient_value_changed_from_spingox)
+        self.gradient_graph.sig_region_changed.connect(self.gradient_value_changed_from_graph)
+        self.gradient_graph.sig_region_change_finished.connect(self.gradient_value_change_finished_from_graph)
         self.btn_close.clicked.connect(self.close)
         # フラッグ
         self.setWindowFlags(
@@ -345,6 +369,20 @@ class ViewRangeSettings(QWidget):
             Qt.WindowType.WindowStaysOnTopHint
         )
         self.enable_input(False)
+        size_hint = self.sizeHint()
+        size_hint.setWidth(0)
+        size_hint.setHeight(0)
+        self.resize(size_hint)
+    # methods related to complicated events
+    def event_process_deco(func):
+        def wrapper(self, *keys, **kwargs):
+            if self.ignore_event:
+                return
+            self.ignore_event = True
+            res = func(self, *keys, **kwargs)
+            self.ignore_event = False
+            return res
+        return wrapper
     def enable_input(self, enable):
         # x spinboxes
         self.x_btm_c.setEnabled(enable)
@@ -356,6 +394,10 @@ class ViewRangeSettings(QWidget):
         self.y_top_c.setEnabled(enable)
         self.y_btm_s.setEnabled(enable)
         self.y_top_s.setEnabled(enable)
+        # mz_RT images
+        self.gradient_btm.setEnabled(enable)
+        self.gradient_top.setEnabled(enable)
+        self.gradient_graph.setEnabled(enable)
     def enable_y_c(self, enable):
         self.y_btm_c.setEnabled(enable)
         self.y_top_c.setEnabled(enable)
@@ -374,6 +416,28 @@ class ViewRangeSettings(QWidget):
     def set_values_c_y(self, y_view_range_c):
         self.y_btm_c.setValue(y_view_range_c[0])
         self.y_top_c.setValue(y_view_range_c[1])
+    @event_process_deco
+    def set_values_contrast(self, contrast):
+        self.gradient_btm.setValue(contrast[0])
+        self.gradient_top.setValue(contrast[1])
+        self.gradient_graph.setValue(contrast)
+        self.gradient_graph.adjust_view_range()
+    @event_process_deco
+    def gradient_value_changed_from_spingox(self, *keys, **kwargs):
+        gradient_btm = self.gradient_btm.value()
+        gradient_top = self.gradient_top.value()
+        self.gradient_graph.setValue((gradient_btm, gradient_top))
+        self.contrast_changed_i.emit(gradient_btm, gradient_top)
+        self.gradient_graph.adjust_view_range()
+    @event_process_deco
+    def gradient_value_changed_from_graph(self, gradient_btm, gradient_top):
+        self.gradient_btm.setValue(gradient_btm)
+        self.gradient_top.setValue(gradient_top)
+    @event_process_deco
+    def gradient_value_change_finished_from_graph(self, gradient_btm, gradient_top):
+        self.gradient_btm.setValue(gradient_btm)
+        self.gradient_top.setValue(gradient_top)
+        self.contrast_changed_i.emit(gradient_btm, gradient_top)
     def closeEvent(self, ev):
         ev.ignore()
         self.hide()

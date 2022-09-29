@@ -57,6 +57,17 @@ class ChromatogramWindow(mpw.MyPlotWidget):
     def update_RT_region(self, RT_btm, RT_top):
         self.region0.setRegion((RT_btm, RT_top))
 
+class MzRTImageWindow(mpw.MyImageWidget):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    def update_mz_RT_image(self, rpd):
+        # self.set_image(np.rot90(np.log2(rpd.to_mz_RT_image() + 1), 1))
+        self.set_image(np.rot90(rpd.to_mz_RT_image(), 1))
+        self.set_range_of_image(x_range=rpd.RT_list[[0, -1]], y_range=rpd.ref_mz_list()[[0, -1]])
+    def update_mz_RT_image_pseudo(self, rpd):
+        self.set_image(np.array([[0]]))
+        self.set_range_of_image(x_range=rpd.RT_list[[0, -1]], y_range=rpd.ref_mz_list()[[0, -1]])
+
 class InfoWindow(mw.PaintableQWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

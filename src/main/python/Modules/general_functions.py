@@ -23,7 +23,11 @@ import pyqtgraph as pg
 # VERSION INFO #
 ################
 QApplication.setApplicationName('RAPID')
-QApplication.setApplicationVersion('0.2.0')
+QApplication.setApplicationVersion('0.2.1')
+update_history = {
+    "0.2.0":"General framework was generated.", 
+    "0.2.1":"Minor bugfixes, mz_RT_images was implemented, but is hidden from GUI.", 
+}
 name = QApplication.applicationName()
 ver = QApplication.applicationVersion()
 def app_version():

@@ -3,7 +3,6 @@
 import os, sys
 import re
 import numpy as np
-from urllib import parse
 import logging
 import functools
 import pickle
@@ -47,13 +46,18 @@ def get_resource_path():
 class MainWindow(QMainWindow):
     # child_window_list_changed = pyqtSignal(QWidget)
     def __init__(self):
-        # 全体設定
+        ####################
+        # general settings #
+        ####################
         gf.settings.load_settings(get_resource_path())
         ar.load_elements(gf.settings.resource_path / "Atomic Weights and Isotopic Compositions 20220704.txt")
+        # hidden settings
+        image_on = False
+        fast_display = True
 
         super().__init__()
         self.setWindowTitle(gf.app_version())
-        self.central_widget = cw.CentralWidget(main_window=self)
+        self.central_widget = cw.CentralWidget(main_window=self, image_on=image_on)
         self.setCentralWidget(self.central_widget)
         # error処理
         sys.excepthook = self.excepthook
@@ -66,7 +70,7 @@ class MainWindow(QMainWindow):
         - MVP should be defied after the construction of central widget
         """
         self.database = db.DataBase(main_window=self)
-        self.model = model.Model(main_window=self)
+        self.model = model.Model(main_window=self, fast_display=fast_display)
         self.presenter = presenter.Presenter(main_window=self)
 
         ############
@@ -81,7 +85,7 @@ class MainWindow(QMainWindow):
         fileMenu.addAction('Export Images', self.presenter.export_images_clicked).setShortcut("Ctrl+Shift+E")
         # Edit
         editMenu = self.menuBar().addMenu('Edit')
-        editMenu.addAction('Add', self.presenter.add_compound_clicked).setShortcut("Ctrl+A")
+        editMenu.addAction('Add', self.presenter.add_compound_clicked) #.setShortcut("Ctrl+A")
         # View
         viewMenu = self.menuBar().addMenu('View')
         viewMenu.addAction('Set View Range', self.presenter.set_view_range_clicked).setShortcut("Ctrl+Meta+V")
@@ -89,6 +93,7 @@ class MainWindow(QMainWindow):
         toolsMenu = self.menuBar().addMenu('Tools')
         toolsMenu.addAction("Atomic Ratio Calculator", self.show_atomic_ratio_window).setShortcut("Ctrl+T")
         toolsMenu.addAction("Execute Deisotoping", self.presenter.execute_Deisotoping).setShortcut("Ctrl+D")
+        toolsMenu.addAction("Generate mz-RT Image2D", self.presenter.generate_mz_RT_Image2D).setShortcut("Ctrl+G")
         # Helps
         helpMenu = self.menuBar().addMenu('Help')
         helpMenu.addAction('About', self.show_about)

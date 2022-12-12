@@ -175,6 +175,15 @@ class Elements():
                 break
             exact_mass += n * getattr(self, atomic_symbol).get_most_abundant_atom().relative_atomic_mass
         return exact_mass
+    def calc_charge(self, formula):
+        if isinstance(formula, str):
+            formula = Formula(formula)
+        try:    positive_charge = getattr(formula, "+")
+        except: positive_charge = 0
+        try:    negative_charge = getattr(formula, "-")
+        except: negative_charge = 0
+        return positive_charge - negative_charge
+
 def combine_distribution_patterns(distribution_patterns_of_each_atoms, composition_threshold, group_by_mass_number):
     relative_atomic_mass_list_new = []
     isotopic_composition_list_new = []
@@ -218,8 +227,16 @@ def combine_distribution_patterns(distribution_patterns_of_each_atoms, compositi
 
 class Formula():
     def __init__(self, formula_pre):
+        pattern = r"([A-Z][a-z]*|-|\+)([0-9]*)"
+        pattern4split = r"(?:[A-Z][a-z]*|-|\+)[0-9]*"
+        # とりま、都合の悪い文字が入ってたら全部エラーを返す
+        extra_letters = re.split(pattern4split, formula_pre)
+        error = [extra_letter for extra_letter in extra_letters if extra_letter != ""]
+        if len(error) != 0:
+            raise Exception(f"Error!\nLetter {error} is not allowed!")
+        # 実行
         self.atomic_symbol_list = []
-        m = re.findall(r"([A-Z][a-z]*)([0-9]*)", formula_pre)
+        m = re.findall(pattern, formula_pre)
         for atomic_symbol, n in m:
             if n == "":
                 n = 1
@@ -247,13 +264,39 @@ def load_elements(atomic_ratio_source):
     global e
     e = Elements()
     e.load_atoms(str(atomic_ratio_source))
+    set_electron()
     set_custom_deuterium_atoms(d_purity=1.00)
 
-
+def custom_electron_adduct():
+    custom_electron_adduct = [
+        Atom(
+            atomic_number = -1, 
+            atomic_symbol = "-", 
+            mass_number = 0, 
+            relative_atomic_mass = 0.00, 
+            isotopic_composition = 1.00, 
+            standard_atomic_weight = [None, None], 
+            notes = None
+        )
+    ]
+    return custom_electron_adduct
+def custom_electron_removal():
+    custom_electron_removal = [
+        Atom(
+            atomic_number = -2, 
+            atomic_symbol = "+", 
+            mass_number = 0, 
+            relative_atomic_mass = 0.00, 
+            isotopic_composition = 1.00, 
+            standard_atomic_weight = [None, None], 
+            notes = None
+        )
+    ]
+    return custom_electron_removal
 def custom_deuterium_atoms(d_purity):
     custom_deuterium_atoms = [
         Atom(
-            atomic_number = -1, 
+            atomic_number = -3, 
             atomic_symbol = "D", 
             mass_number = 2, 
             relative_atomic_mass = 2.01410177812, 
@@ -262,7 +305,7 @@ def custom_deuterium_atoms(d_purity):
             notes = None
         ), 
         Atom(
-            atomic_number = -1, 
+            atomic_number = -3, 
             atomic_symbol = "D", 
             mass_number = 1, 
             relative_atomic_mass = 1.00782503223, 
@@ -272,10 +315,11 @@ def custom_deuterium_atoms(d_purity):
         )
     ]
     return custom_deuterium_atoms
-
 def set_custom_deuterium_atoms(d_purity):
     e.add_atoms(custom_deuterium_atoms(d_purity=d_purity))
-
+def set_electron():
+    e.add_atoms(custom_electron_adduct())
+    e.add_atoms(custom_electron_removal())
 def remove_custom_deuterium_atoms():
     e.remove_atoms(atomic_number=-1)
 

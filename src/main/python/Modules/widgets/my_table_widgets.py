@@ -64,19 +64,22 @@ class Formula(QLineEdit, AbstractWidgetInsideCompoundCell):
             self.enter_pressed.emit()
         return super().keyPressEvent(key_event)
 
-class ExactMass(QLabel, AbstractWidgetInsideCompoundCell):
+class M_over_Z(QLabel, AbstractWidgetInsideCompoundCell):
     decimal = 5
     def __init__(self, *keys, **kwargs):
         super().__init__(*keys, **kwargs)
         self.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
     def setText_by_formula(self, formula):
-        exact_mass = ar.e.calc_exact_mass(formula=formula)
-        self.setText(str(np.round(exact_mass, self.decimal)))
+        m = ar.e.calc_exact_mass(formula=formula)
+        z = ar.e.calc_charge(formula=formula)
+        if z == 0:
+            z = 1
+        self.setText(str(np.round(abs(m/z), self.decimal)))
 class BtnTIC(nb.BtnTIC, AbstractWidgetInsideCompoundCell):
     pass
 
 class CompoundCell(QWidget):
-    exact_mass_width = 70
+    m_over_z_width = 75
     def __init__(self, parent, index):
         super().__init__(parent)
         self.unique_data_id = None
@@ -86,8 +89,8 @@ class CompoundCell(QWidget):
         self.mz_range_box = MzRangeBox()
         self.compound_name = CompoundName()
         self.formula = Formula()
-        self.exact_mass = ExactMass("0")
-        self.exact_mass.setFixedWidth(self.exact_mass_width)
+        self.m_over_z = M_over_Z("0")
+        self.m_over_z.setFixedWidth(self.m_over_z_width)
         self.btn_TIC = BtnTIC()
         # layout1
         top_layout = QGridLayout()
@@ -95,7 +98,7 @@ class CompoundCell(QWidget):
         top_layout.addWidget(self.compound_name, 0, 0, 1, 2)
         top_layout.addWidget(self.btn_TIC, 0, 2, 1, 1)
         top_layout.addWidget(self.formula, 1, 0, 1, 1)
-        top_layout.addWidget(self.exact_mass, 1, 1, 1, 2)
+        top_layout.addWidget(self.m_over_z, 1, 1, 1, 2)
         inner_layout = QGridLayout()
         inner_layout.setContentsMargins(2,2,2,2)
         inner_layout.setSpacing(0)
@@ -173,16 +176,16 @@ class CompoundCell(QWidget):
         self.model().items.update(self.index().row(), compound_name=compound_name)
     def formula_changed(self, formula):
         self.model().items.update(self.index().row(), formula=formula)
-        self.exact_mass.setText_by_formula(formula)
+        self.m_over_z.setText_by_formula(formula)
     def formula_enter_pressed(self):
-        exact_mass = float(self.exact_mass.text())
+        m_over_z = float(self.m_over_z.text())
         self.btn_TIC.setChecked(False)
         # edit data
         self.pass_signal_to_presenter = False
         self.btn_TIC_clicked(status=False)
-        self.mz_box.setValue(exact_mass)
+        self.mz_box.setValue(m_over_z)
         self.pass_signal_to_presenter = True
-        self.target_data_changed({"formula":[exact_mass, self.mz_range_box.value()]})
+        self.target_data_changed({"formula":[m_over_z, self.mz_range_box.value()]})
     def btn_TIC_clicked(self, status):
         self.enable_mz_related_box(not status)
         self.model().items.update(self.index().row(), is_TIC=status)
@@ -270,6 +273,12 @@ class MyTableView(QTableView):
     def keyReleaseEvent(self, event):
         self.selection_changed = False  # reset
         return super().keyReleaseEvent(event)
+    def keyPressEvent(self, event):
+        # ignore every input except for up and down
+        if event.key() in (16777235, 16777237):   # up or down
+            return super().keyPressEvent(event)
+        else:
+            return
     def selectionChanged(self, *args):
         self.selection_changed = True
         super().selectionChanged(*args)

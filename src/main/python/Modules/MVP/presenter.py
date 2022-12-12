@@ -324,6 +324,9 @@ class Presenter():
         self.data_area().update_mz_regions(mz_btm, mz_top)
         chromatograms = self.model().extract_chromatograms(mz_btm, mz_top)
         self.data_area().update_chromatograms(chromatograms)
+
+        print(chromatograms)
+
         # update y view range
         self.ignore_event = False
         y_scale_status_c = self.navigation_bar().get_y_scale_status_c()

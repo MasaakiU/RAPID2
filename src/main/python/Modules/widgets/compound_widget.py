@@ -13,10 +13,10 @@ from PyQt6.QtGui import (
 from PyQt6.QtCore import (
     Qt, 
     pyqtSignal, 
-    QItemSelection, 
-)
+    QCoreApplication, 
 
-from ..widgets import my_table_widgets as mtw
+)
+from ..widgets import my_table_widgets as mtw, popups
 from ..widgets import my_widgets as mw
 from .. import general_functions as gf
 
@@ -126,7 +126,13 @@ class CompoundWidget(QWidget):
             'm/z_btm':'mz_btm', 
             'm/z_top':'mz_top'
         })
+        if "view_range_s_x" not in target_df.columns:
+            target_df["view_range_s_x"] = list(map(lambda x: str(list(x)), zip(target_df["mz"] - 3, target_df["mz"] + 5)))
+        if "view_range_c_x" not in target_df.columns:
+            target_df["view_range_c_x"] = list(map(lambda x: str(list(x)), zip(target_df["RT"] - 2, target_df["RT"] + 2)))
         # add targets
+        self.pbar = popups.ProgressBar(N_max=target_df.shape[0], message="Loading Targets")
+        self.pbar.show()
         for i, s in target_df.iterrows():
             # modify
             s["view_range_s_x"] = eval(s["view_range_s_x"])
@@ -147,6 +153,8 @@ class CompoundWidget(QWidget):
                 "view_range_c_x"
             ]].to_dict()
             self.add_compound(**data_item)
+            self.pbar.add()
+            QCoreApplication.processEvents()
     def update_info_of_selected_target(self, **item_kwargs):
         selected_rows = self.compound_table.selectionModel().selectedRows()
         if len(selected_rows) == 0:

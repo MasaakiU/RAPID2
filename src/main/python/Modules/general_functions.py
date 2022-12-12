@@ -2,7 +2,7 @@
 
 import imp
 from importlib.resources import path
-import resource
+# import resource
 import sys, os
 import textwrap
 from pathlib import Path
@@ -19,14 +19,26 @@ from PyQt6.QtWidgets import (
 
 import pyqtgraph as pg
 
+###########
+# 文字処理 #
+###########
+def rm_indent(string):
+    return textwrap.dedent(string).strip()
+
 ################
 # VERSION INFO #
 ################
 QApplication.setApplicationName('RAPID')
-QApplication.setApplicationVersion('0.2.1')
+QApplication.setApplicationVersion('0.2.2')
 update_history = {
     "0.2.0":"General framework was generated.", 
     "0.2.1":"Minor bugfixes, mz_RT_images was implemented, but is hidden from GUI.", 
+    "0.2.2":rm_indent("""
+        Support of charge number of ions
+        - 1 (+, +2, +3, ..., -, -2, -3, ...).
+        Bugfixes for deisotoping
+        - bug fix for display original data. Previously, original data was displayed correctly only when mz, RT ranges are equal to one of the targets.
+        """), 
 }
 name = QApplication.applicationName()
 ver = QApplication.applicationVersion()
@@ -138,11 +150,6 @@ def new_file_path_wo_overlap(file_path, spacing="_"):
         file_path_output = (file_path.parent / f"{file_path.stem}{spacing}{i}").with_suffix(file_path.suffix)
     return file_path_output
 
-###########
-# 文字処理 #
-###########
-def rm_indent(string):
-    return textwrap.dedent(string).strip()
 
 
 

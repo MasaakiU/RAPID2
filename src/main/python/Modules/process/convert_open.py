@@ -359,7 +359,8 @@ def revert_deep_diff(array2d, initial_arrays, axis_list):
     if len(initial_arrays) != len(axis_list):
         raise Exception(f"invalid")
 
-    import time
+    # import time
+    # t0 = time.time()
     for initial_array, axis in zip(initial_arrays[::-1], axis_list[::-1]):
         # if (array2d.dtype == np.float64) and (axis == 0):
         #     array2d = rpd_calc.cumsum_2d_axis0_float64(np.vstack((np.expand_dims(initial_array, axis), array2d)))
@@ -378,6 +379,7 @@ def revert_deep_diff(array2d, initial_arrays, axis_list):
             array2d = np.cumsum(np.vstack((np.expand_dims(initial_array, axis), array2d)), axis=0, dtype=array2d.dtype)
         elif axis == 1:
             array2d = np.cumsum(np.hstack((np.expand_dims(initial_array, axis), array2d)), axis=1, dtype=array2d.dtype)
+    # print(time.time() - t0)
     return array2d
 
 def dump_2_2(rpd, rpd_path):

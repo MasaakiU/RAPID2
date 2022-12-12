@@ -26,12 +26,16 @@ class Deisotoping():
 
     def get_deisotoping_info(self, i):
         data_item = self.data_items[i]
-        relative_atomic_mass_list, isotopic_composition_list, mass_number_list = ar.e.mass_distribution(ar.Formula(data_item.formula), composition_threshold=10**(-9), group_by_mass_number=True)
-        relative_atomic_mass_list = relative_atomic_mass_list[:self.mass_number_threshold]
+        formula = ar.Formula(data_item.formula)
+        relative_atomic_mass_list, isotopic_composition_list, mass_number_list = ar.e.mass_distribution(formula, composition_threshold=10**(-9), group_by_mass_number=True)
+        charge = abs(ar.e.calc_charge(formula))
+        assert charge > 0
+        relative_atomic_mass_list = relative_atomic_mass_list[:self.mass_number_threshold] / charge
         isotopic_composition_list = isotopic_composition_list[:self.mass_number_threshold] / isotopic_composition_list[0]
         return relative_atomic_mass_list, isotopic_composition_list, data_item
 
 def deisotope_core(target_mz_list, target_inten_list, relative_atomic_mass_list, isotopic_composition_list):
+    original_target_inten_list = np.copy(target_inten_list)
     # Values of "target_intens_list", which should be a view of some other list, will be updated.
     if isotopic_composition_list[0] != 1:
         isotopic_composition_list /= isotopic_composition_list[0]
@@ -60,7 +64,7 @@ def deisotope_core(target_mz_list, target_inten_list, relative_atomic_mass_list,
         target_inten_list[mz_btm_idx:mz_top_idx] -= inten_list_to_subtract
     # Values below zero are not allowed.
     target_inten_list[target_inten_list < 0] = 0
-
+    return original_target_inten_list - target_inten_list
 
 
 

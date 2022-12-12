@@ -65,6 +65,8 @@ class Model():
     def extract_info(self, index):
         return self.rpd_list[index].extract_info()
     def export_auc_data(self, data_items):
+        self.pbar = popups.ProgressBar(N_max=len(data_items) * len(self.rpd_list), message="Exporting Results")
+        self.pbar.show()
         auc_data_list = []
         for data_item in data_items:
             print(data_item.compound_name)
@@ -114,6 +116,8 @@ class Model():
                     new_data_item["mz_range"] = "None"
                 # append
                 auc_data_list.append(new_data_item)
+                self.pbar.add()
+                QCoreApplication.processEvents()
         df = pd.DataFrame.from_records(auc_data_list)
         column_order = [
             'compound_name', 
@@ -148,8 +152,12 @@ class Model():
         })
     # deisotoping
     def set_deisotoping(self, deisotoping):
+        self.pbar = popups.ProgressBar(N_max=len(self.rpd_list), message="Executing Deisotoping")
+        self.pbar.show()
         for rpd in self.rpd_list:
             rpd.set_deisotoping(deisotoping)
+            self.pbar.add()
+            QCoreApplication.processEvents()
 
 
 

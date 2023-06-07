@@ -195,10 +195,7 @@ class RPD():
         mz_top, 
         RT_btm, 
         RT_top, 
-        return_BG_subtraction, 
-        return_height, 
-        return_baseline_height, 
-        return_real_RT_range
+        calc_minimum_info, 
     ):
         RT_idx_btm = rpd_calc.index_greater_than(threshold=RT_btm, array1d=self.RT_list)
         RT_idx_top = rpd_calc.index_greater_than(threshold=RT_top, array1d=self.RT_list)
@@ -207,19 +204,37 @@ class RPD():
         extracted_RT_list = self.RT_list[RT_idx_btm:RT_idx_top]
         extracted_mz_set = self.mz_set[RT_idx_btm:RT_idx_top, :]
         extracted_inten_set = self.inten_set[RT_idx_btm:RT_idx_top, :]
-        # extracted_inten_list = self.extract_chromatogram_core(mz_btm, mz_top, extracted_mz_set, extracted_inten_set)
-        extracted_inten_list = rpd_calc.extract_chromatogram_core_float64int32(mz_btm, mz_top, extracted_mz_set, extracted_inten_set)
-        auc = self.calc_auc_core(extracted_RT_list, extracted_inten_list)
-        r = [auc]
-        if return_BG_subtraction:
-            BG = extracted_inten_list.min() * (extracted_RT_list[-1] - extracted_RT_list[0])
-            r += [auc - BG]
-        if return_height:
-            r += [extracted_inten_list.max()]
-        if return_baseline_height:
-            r += [extracted_inten_list.min()]
-        if return_real_RT_range:
-            r += [extracted_RT_list[[0, -1]]]
+        extracted_inten_list_RT = rpd_calc.extract_chromatogram_core_float64int32(mz_btm, mz_top, extracted_mz_set, extracted_inten_set)
+        # extracted_inten_list_RT = self.extract_chromatogram_core(mz_btm, mz_top, extracted_mz_set, extracted_inten_set)
+        auc = self.calc_auc_core(extracted_RT_list, extracted_inten_list_RT)
+        # generate result
+        r = {"area":auc}
+        if not calc_minimum_info:
+            BG = extracted_inten_list_RT.min() * (extracted_RT_list[-1] - extracted_RT_list[0])
+
+            # self.ref_row において、基準となる idx を求める
+            mz_btm_idx_on_ref_row = max(rpd_calc.index_greater_than(mz_btm, self.ref_mz_list()) - 1, 0)
+            mz_top_idx_on_ref_row = min(rpd_calc.index_greater_than(mz_top, self.ref_mz_list())    , self.mz_set.shape[1] - 1)
+            # 基準となる idx を元に、（予め計算しておいた mz_ref_info_for... に基づいて）探索範囲の idx を取得する
+            mz_btm_idx = self.mz_set_info_for_chromatogram_extraction[0, mz_btm_idx_on_ref_row]
+            mz_top_idx = self.mz_set_info_for_chromatogram_extraction[1, mz_top_idx_on_ref_row]
+            # extracted_mz_set = self.mz_set[:, mz_btm_idx:mz_top_idx + 1]
+            extracted_inten_set2 = extracted_inten_set[:, mz_btm_idx:mz_top_idx + 1]
+            extracted_mz_set2 = extracted_mz_set[:, mz_btm_idx:mz_top_idx + 1]
+
+            extracted_mz_list, extracted_inten_list_mz = self.calc_mz_inten_list_average(extracted_mz_set2.reshape(-1), extracted_inten_set2.reshape(-1), RT_idx_top - RT_idx_btm)
+            extracted_RT_argmax = np.argmax(extracted_inten_list_RT)
+            extracted_mz_argmax = np.argmax(extracted_inten_list_mz)
+            peaktop_RT = extracted_RT_list[extracted_RT_argmax]
+            peaktop_mz = extracted_mz_list[extracted_mz_argmax]
+            r["area (baseline adjusted)"] = auc - BG
+            r["height"] = extracted_inten_list_RT[extracted_RT_argmax]
+            r["baseline_height"] = extracted_inten_list_RT.min()
+            r["RT_btm (value used for calculation)"] = extracted_RT_list[0]
+            r["RT_top (value used for calculation)"] = extracted_RT_list[-1]
+            r["RT peaktop"] =peaktop_RT
+            r["mz peaktop"] =peaktop_mz
+            r["is deisotoped"] = not self.inten_info_set_list_subtracted_by_deisotoping.is_empty()
         return r
     def calc_spectrum_auc(self, RT_btm, RT_top):
         pass

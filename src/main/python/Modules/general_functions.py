@@ -1,19 +1,15 @@
 # -*- coding: utf-8 -*-
 
-import imp
 from importlib.resources import path
 # import resource
-import sys, os
 import textwrap
 from pathlib import Path
-import pickle
 
 from PyQt6.QtGui import (
     QFont, 
     QFontDatabase, 
 )
 from PyQt6.QtWidgets import (
-    QLabel, 
     QApplication
 )
 
@@ -29,7 +25,7 @@ def rm_indent(string):
 # VERSION INFO #
 ################
 QApplication.setApplicationName('RAPID')
-QApplication.setApplicationVersion('0.2.2')
+QApplication.setApplicationVersion('0.2.3')
 update_history = {
     "0.2.0":"General framework was generated.", 
     "0.2.1":"Minor bugfixes, mz_RT_images was implemented, but is hidden from GUI.", 
@@ -39,6 +35,15 @@ update_history = {
         Bugfixes for deisotoping
         - bug fix for display original data. Previously, original data was displayed correctly only when mz, RT ranges are equal to one of the targets.
         """), 
+    "0.2.3":rm_indent("""
+        Now the peak tops of RT and m/z, 'is deisotoped' fields are exported along with the targeet.
+        Minor bug fix that the progress bar does not appear during Deisotoping before at least 1 file has been processed.
+        Minor changes in the way when you unheck "AutoRange" buttons for chromatograms.
+        Bug fixes: forbit opening target files when no file is opened.
+        Bug fixes: When TIC is True, exported target file was not be able to be re-used. -> fixed.
+        Support for dark mode.
+    """
+    )
 }
 name = QApplication.applicationName()
 ver = QApplication.applicationVersion()

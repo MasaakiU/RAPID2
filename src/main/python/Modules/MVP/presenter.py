@@ -1,27 +1,15 @@
 # -*- coding: utf-8 -*-
 
-from curses import window
 import pandas as pd
 import shutil
 import numpy as np
 from pathlib import Path
 from functools import partial
 from PyQt6.QtWidgets import (
-    QApplication, 
-    QMainWindow, 
     QFileDialog, 
-    QWidget, 
-    QVBoxLayout, 
-    QHBoxLayout,  
-    QSizePolicy, 
-    QMenuBar, 
 )
 from PyQt6.QtCore import (
-    Qt, 
-    QObject, 
-    QThread, 
     QThreadPool, 
-    QCoreApplication, 
 )
 
 from .. import general_functions as gf
@@ -276,6 +264,11 @@ class Presenter():
         self.view_range_settings().activateWindow()
     @event_process_deco
     def load_targets_clicked(self):
+        # forbit opening target files when no file is opened
+        if len(self.model().data_hash_list) == 0:
+            w = popups.WarningPopup("Please open at least 1 file before loading targets!")
+            w.exec()
+            return
         # パス
         file_path = gf.new_dir_path_wo_overlap(gf.settings.last_opened_dir / (gf.settings.last_opened_dir.name))
         file_path, dir_type = QFileDialog.getOpenFileName(self.main_window, 'Select a file', str(file_path), filter="csv file (*.csv)")
@@ -506,7 +499,7 @@ class Presenter():
         # update view range
         self.ignore_event = False
         y_scale_status_c = self.navigation_bar().get_y_scale_status_c()
-        self.set_view_range_c_y_by_y_scale_status(y_scale_status_c.replace("L1A0", "L1A1"), ref_index=None)
+        self.set_view_range_c_y_by_y_scale_status(y_scale_status_c, ref_index=0)#.replace("L1A0", "L1A1"), ref_index=None)
         # view_range_settings
         self.update_view_range_settings_c_y(y_scale_status_c)
     @event_process_deco
@@ -675,7 +668,7 @@ class Presenter():
         # update data
         self.ignore_event = False
         self.RT_related_box_changed(RT=data_item.RT, RT_range=data_item.RT_range)
-        self.btn_status_changed_c(btn_type="TIC", is_checked=data_item.is_TIC)        
+        self.btn_status_changed_c(btn_type="TIC", is_checked=data_item.is_TIC)
         # self.mz_related_box_changed(mz=data_item.mz, mz_range=data_item.mz_range)
     @event_process_deco
     def compound_deselected(self):

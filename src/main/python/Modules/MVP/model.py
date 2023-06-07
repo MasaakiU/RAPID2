@@ -2,7 +2,7 @@
 
 import numpy as np
 import pandas as pd
-import copy
+from collections import defaultdict
 from ..widgets import popups
 from PyQt6.QtCore import (
     QCoreApplication, 
@@ -87,15 +87,10 @@ class Model():
                     mz_top, 
                     RT_btm, 
                     RT_top, 
-                    return_BG_subtraction=True, 
-                    return_height=True, 
-                    return_baseline_height=True, 
-                    return_real_RT_range=True
+                    calc_minimum_info = False
                 )
-                if r is not None:
-                    auc, auc_BG, height, baseline_height, (real_RT_btm, real_RT_top) = r
-                else:
-                    auc, auc_BG, height, baseline_height, (real_RT_btm, real_RT_top) = np.nan, np.nan, np.nan, np.nan, (np.nan, np.nan)
+                if r is None:
+                    r = defaultdict(lambda: np.nan)
                 new_data_item = data_item.copy()
                 new_data_item["file_path"] = rpd.file_path
                 new_data_item["file_name"] = rpd.file_path.name
@@ -105,15 +100,22 @@ class Model():
                 new_data_item["mz_top"] = mz_top
                 new_data_item["RT_btm"] = RT_btm
                 new_data_item["RT_top"] = RT_top
-                new_data_item["area"] = auc
-                new_data_item["area (baseline adjusted)"] = auc_BG
-                new_data_item["height"] = height
-                new_data_item["baseline_height"] = baseline_height
-                new_data_item["RT_btm (value used for calculation)"] = real_RT_btm
-                new_data_item["RT_top (value used for calculation)"] = real_RT_top
+                keys = [
+                    "area", 
+                    "area (baseline adjusted)", 
+                    "height", 
+                    "baseline_height", 
+                    "RT_btm (value used for calculation)", 
+                    "RT_top (value used for calculation)", 
+                    "RT peaktop", 
+                    "mz peaktop", 
+                    "is deisotoped"
+                ]
+                for key in keys:
+                    new_data_item[key] = r[key]
                 if new_data_item.is_TIC:
-                    new_data_item["mz"] = "None"
-                    new_data_item["mz_range"] = "None"
+                    new_data_item["mz"] = -1
+                    new_data_item["mz_range"] = -1
                 # append
                 auc_data_list.append(new_data_item)
                 self.pbar.add()
@@ -143,6 +145,11 @@ class Model():
             'area (baseline adjusted)', 
             "height", 
             "baseline_height", 
+            "RT_btm (value used for calculation)", 
+            "RT_top (value used for calculation)", 
+            "RT peaktop", 
+            "mz peaktop", 
+            "is deisotoped"
         ]
         return df.reindex(columns=column_order).rename(columns={
             'mz':'m/z', 
@@ -154,6 +161,7 @@ class Model():
     def set_deisotoping(self, deisotoping):
         self.pbar = popups.ProgressBar(N_max=len(self.rpd_list), message="Executing Deisotoping")
         self.pbar.show()
+        QCoreApplication.processEvents()
         for rpd in self.rpd_list:
             rpd.set_deisotoping(deisotoping)
             self.pbar.add()

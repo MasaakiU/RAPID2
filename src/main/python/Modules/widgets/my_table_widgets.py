@@ -159,7 +159,7 @@ class CompoundCell(QWidget):
         if QStyle.StateFlag.State_Selected in option.state: # (QStyle.StateFlag.State_Active in option.state)
             p.setColor(self.inner_widget.backgroundRole(), QColor("#99ccff"))
         else:
-            p.setColor(self.inner_widget.backgroundRole(), Qt.GlobalColor.white)
+            p.setColor(self.inner_widget.backgroundRole(), Qt.GlobalColor.transparent)#.white)#
         self.inner_widget.setPalette(p)
     def set_selection(self, event):
         if isinstance(event, QFocusEvent):

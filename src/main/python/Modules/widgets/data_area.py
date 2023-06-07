@@ -382,7 +382,7 @@ class InfoLayout(MyLayout):
         info_window = dw.InfoWindow()
         info_window.setFixedWidth(self.data_area.info_w)
         info_window.setFixedHeight(self.data_area.data_info_h)
-        info_window.setStyleSheet("QWidget{background: #FFFFFF}")
+        # info_window.setStyleSheet("QWidget{background: #FFFFFF}")
         self.insertWidget(self.count() - 1, info_window)
     def update_info_at(self, i, info):
         self.itemAt(i).widget().update_info(info)

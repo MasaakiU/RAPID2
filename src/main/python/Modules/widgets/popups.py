@@ -72,7 +72,7 @@ class WarningPopup(QMessageBox):
             raise Exception(f"unknown type\n{p_type}")
         # 設定
         p = self.palette()
-        p.setColor(self.backgroundRole(), Qt.GlobalColor.white)
+        p.setColor(self.backgroundRole(), Qt.GlobalColor.transparent)#white)
         self.setPalette(p)
     def setDetailedText(self, string, font_name="Monospace", style_hint=QFont.StyleHint.Courier):
         super().setDetailedText(string)

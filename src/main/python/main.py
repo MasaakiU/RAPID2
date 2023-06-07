@@ -1,25 +1,12 @@
 # -*- Coding: utf-8 -*-
 
 import os, sys
-import re
-import numpy as np
-import logging
-import functools
-import pickle
-import glob
 import traceback
-import io
 from pathlib import Path
 
 from PyQt6.QtWidgets import (
     QApplication, 
     QMainWindow, 
-    QFileDialog, 
-    QWidget, 
-    QVBoxLayout, 
-    QHBoxLayout,  
-    QSizePolicy, 
-    QMenuBar, 
 )
 
 # my modules
@@ -101,7 +88,7 @@ class MainWindow(QMainWindow):
         #########
         # STYLE #
         #########
-        self.setStyleSheet("QMainWindow {background: #FFFFFF}")
+        self.setStyleSheet("QMainWindow {background: #00FFFFFF}")
 
         ########
         # TEST #

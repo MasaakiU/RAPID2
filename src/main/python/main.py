@@ -72,7 +72,8 @@ class MainWindow(QMainWindow):
         fileMenu.addAction('Export Images', self.presenter.export_images_clicked).setShortcut("Ctrl+Shift+E")
         # Edit
         editMenu = self.menuBar().addMenu('Edit')
-        editMenu.addAction('Add', self.presenter.add_compound_clicked) #.setShortcut("Ctrl+A")
+        editMenu.addAction('Add Target', self.presenter.add_compound_clicked) #.setShortcut("Ctrl+A")
+        editMenu.addAction('Remove All Targets', self.presenter.remove_all_targets_clicked)
         # View
         viewMenu = self.menuBar().addMenu('View')
         viewMenu.addAction('Set View Range', self.presenter.set_view_range_clicked).setShortcut("Ctrl+Meta+V")
@@ -81,6 +82,7 @@ class MainWindow(QMainWindow):
         toolsMenu.addAction("Atomic Ratio Calculator", self.show_atomic_ratio_window).setShortcut("Ctrl+T")
         toolsMenu.addAction("Execute Deisotoping", self.presenter.execute_Deisotoping).setShortcut("Ctrl+D")
         toolsMenu.addAction("Generate mz-RT Image2D", self.presenter.generate_mz_RT_Image2D).setShortcut("Ctrl+G")
+        toolsMenu.addAction("Use adduct ion syntax", self.presenter.show_adduct_ion_syntax).setShortcut("Ctrl+H")
         # Helps
         helpMenu = self.menuBar().addMenu('Help')
         helpMenu.addAction('About', self.show_about)
@@ -98,9 +100,11 @@ class MainWindow(QMainWindow):
             demo_file_path_centroid = gf.settings.resource_path.parents[2] / "demo_data" / "20220523_1-v12-mix3_0_centroid.rpd"
             demo_file_path_rpd = gf.settings.resource_path.parents[2] / "demo_data" / "0_blank__p0_v23.rpd"
             demo_file_path_rpd = gf.settings.resource_path.parents[2] / "demo_data" / "8_HEK293T-d9Cho_B&D_p220.rpd"
+            demo_file_path_csv = gf.settings.resource_path.parents[2] / "demo_data" / "PC_simplified_09092024.csv"
             ### open mzdata file and view
             # self.presenter.open_files_clicked([demo_file_path_centroid])
             # self.presenter.open_files_clicked([demo_file_path_rpd])
+            # self.presenter.load_targets_clicked(demo_file_path_csv)
 
             ### convert mzdata file
 

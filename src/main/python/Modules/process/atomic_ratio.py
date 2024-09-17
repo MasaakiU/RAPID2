@@ -247,8 +247,58 @@ class Formula():
             self.atomic_symbol_list.append(atomic_symbol)
         else:
             setattr(self, atomic_symbol, getattr(self, atomic_symbol) + n)
+    def sub_number(self, atomic_symbol, n):
+        # チャージは面倒なので、逆にして足す
+        if atomic_symbol == "+":
+            self.add_number("-", n)
+        elif atomic_symbol == "-":
+            self.add_number("+", n)
+        else:
+            # 実行本体
+            if not hasattr(self, atomic_symbol):
+                raise Exception("error")
+            else:
+                new_n = getattr(self, atomic_symbol) - n
+                if new_n < 0:
+                    raise Exception("error")
+                elif new_n == 0:
+                    self.delete_atom(atomic_symbol)
+                else:
+                    setattr(self, atomic_symbol, new_n)
+    def delete_atom(self, atomic_symbol):
+        delattr(self, atomic_symbol)
+        self.atomic_symbol_list.remove(atomic_symbol)
+    def organize_charge(self):
+        if ("+" in self.atomic_symbol_list) and ("-" in self.atomic_symbol_list):
+            plus_charge = getattr(self, "+")
+            minus_charge = getattr(self, "-")
+            if plus_charge == minus_charge:
+                self.delete_atom("+")
+                self.delete_atom("-")
+            elif plus_charge > minus_charge:
+                setattr(self, "+", plus_charge - minus_charge)
+                self.delete_atom("-")
+            else:
+                setattr(self, "-", minus_charge - plus_charge)
+                self.delete_atom("+")
+    def __iadd__(self, formula):
+        for atomic_symbol in formula.atomic_symbol_list:
+            self.add_number(atomic_symbol, getattr(formula, atomic_symbol))
+        self.organize_charge()
+        return self
+    def __isub__(self, formula):
+        for atomic_symbol in formula.atomic_symbol_list:
+            self.sub_number(atomic_symbol, getattr(formula, atomic_symbol))
+        self.organize_charge()
+        return self
+    def __mul__(self, n: int):
+        formula = Formula("")
+        for atomic_symbol in self.atomic_symbol_list:
+            atom_number = getattr(self, atomic_symbol)
+            formula.add_number(atomic_symbol, atom_number * n)
+        return formula
     def __str__(self):
-        return "".join([f"{atomic_symbol}{getattr(self, atomic_symbol)}" for atomic_symbol in self.atomic_symbol_list])
+        return "".join([f"{atomic_symbol}{getattr(self, atomic_symbol)}" if getattr(self, atomic_symbol) > 1 else atomic_symbol for atomic_symbol in self.atomic_symbol_list])
     def __iter__(self):
         self._i = 0
         return self
@@ -258,6 +308,12 @@ class Formula():
         number = getattr(self, atomic_symbol)
         self._i += 1
         return atomic_symbol, number
+    @staticmethod
+    def sum(*list_of_formula):
+        formula_base = Formula("")
+        for formula in list_of_formula:
+            formula_base += formula
+        return formula_base
 
 # https://www.nist.gov/pml/atomic-weights-and-isotopic-compositions-relative-atomic-masses
 def load_elements(atomic_ratio_source):

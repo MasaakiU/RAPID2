@@ -25,7 +25,7 @@ def rm_indent(string):
 # VERSION INFO #
 ################
 QApplication.setApplicationName('RAPID')
-QApplication.setApplicationVersion('0.2.3')
+QApplication.setApplicationVersion('0.2.4')
 update_history = {
     "0.2.0":"General framework was generated.", 
     "0.2.1":"Minor bugfixes, mz_RT_images was implemented, but is hidden from GUI.", 
@@ -38,12 +38,16 @@ update_history = {
     "0.2.3":rm_indent("""
         Now the peak tops of RT and m/z, 'is deisotoped' fields are exported along with the targeet.
         Minor bug fix that the progress bar does not appear during Deisotoping before at least 1 file has been processed.
-        Minor changes in the way when you unheck "AutoRange" buttons for chromatograms.
+        Minor changes in the way when you uncheck "AutoRange" buttons for chromatograms.
         Bug fixes: forbit opening target files when no file is opened.
         Bug fixes: When TIC is True, exported target file was not be able to be re-used. -> fixed.
         Support for dark mode.
-    """
-    )
+    """), 
+    "0.2.4":rm_indent("""
+        Added function in the menu to remove all targets at once.
+        Added adduct ion syntax.
+    """)
+
 }
 name = QApplication.applicationName()
 ver = QApplication.applicationVersion()

@@ -15,6 +15,7 @@ from PyQt6.QtCore import (
 from .. import general_functions as gf
 from ..widgets import popups
 from ..widgets import mz_RT_image2d as mri
+from ..widgets import adduct_ion_syntax as ais
 from ..widgets import data_window as dw
 from ..process import convert_open as co
 from ..process import deisotoping as diso
@@ -162,6 +163,11 @@ class Presenter():
             return
         for rpd, mz_RT_image2d in self.mz_RT_images2d.items():
             mz_RT_image2d.close()
+    def show_adduct_ion_syntax(self):
+        self.adduct_ion_syntax = ais.AdductIonSyntax(initial_adduct_list=self.compound_widget().get_all_adduct_types())
+        self.adduct_ion_syntax.show()
+        self.adduct_ion_syntax.sig_apply_btn_clicked.connect(self.apply_adduct)
+        self.adduct_ion_syntax.sig_sync_RT_btn_clicked.connect(self.sync_RT_by_adduct)
     # methods related to complicated events
     def event_process_deco(func):
         def wrapper(self, *keys, **kwargs):
@@ -263,21 +269,22 @@ class Presenter():
         # self.view_range_settings.raise_()
         self.view_range_settings().activateWindow()
     @event_process_deco
-    def load_targets_clicked(self):
+    def load_targets_clicked(self, file_path=None):
         # forbit opening target files when no file is opened
         if len(self.model().data_hash_list) == 0:
             w = popups.WarningPopup("Please open at least 1 file before loading targets!")
             w.exec()
             return
         # パス
-        file_path = gf.new_dir_path_wo_overlap(gf.settings.last_opened_dir / (gf.settings.last_opened_dir.name))
-        file_path, dir_type = QFileDialog.getOpenFileName(self.main_window, 'Select a file', str(file_path), filter="csv file (*.csv)")
+        if file_path is None:
+            file_path = gf.new_dir_path_wo_overlap(gf.settings.last_opened_dir / (gf.settings.last_opened_dir.name))
+            file_path, dir_type = QFileDialog.getOpenFileName(self.main_window, 'Select a file', str(file_path), filter="csv file (*.csv)")
         if file_path == "":
             return
         target_df = pd.read_csv(file_path, sep="\t", index_col=0, keep_default_na=False)
         self.compound_widget().load_targets(target_df)
     def execute_Deisotoping(self):
-        data_items = self.compound_widget().get_data_items_by_formula()
+        data_items = self.compound_widget().get_data_items_with_formula()
         deisotoping = diso.Deisotoping(data_items)
         self.model().set_deisotoping(deisotoping)
     # from widgets inside window
@@ -646,6 +653,11 @@ class Presenter():
         self.compound_navigator().enable_btn_del(enable=True)
     @event_process_deco
     @target_update_process_deco
+    def remove_all_targets_clicked(self):
+        self.compound_widget().del_all()
+        self.compound_navigator().enable_btn_del(enable=False)
+    @event_process_deco
+    @target_update_process_deco
     def new_compound_selected(self, data_item):
         # navigation bar
         self.navigation_bar().set_RT(RT=data_item.RT, RT_range=data_item.RT_range)
@@ -701,6 +713,11 @@ class Presenter():
                 self.data_area().set_mz_regions_visible(True)
             else:
                 raise Exception(f"unknown key: {k}")
-
+    @target_update_process_deco
+    def apply_adduct(self, adduct_list):
+        self.compound_widget().apply_adducts_to_all(adduct_list)
+    @target_update_process_deco
+    def sync_RT_by_adduct(self, adduct_list):
+        self.compound_widget().sync_RT_by_adduct(adduct_list)
 
 

@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
+import copy
+
 from PyQt6.QtWidgets import (
     QTableView, 
     QStyledItemDelegate, 
@@ -340,7 +342,15 @@ class Items(list):
 class DataItem(dict):
     def __getattr__(self, k):
         return self[k]
-    def copy(self):
+    def copy(self): # legacy?
         return DataItem(**self)
-
-
+    def __deepcopy__(self, memo):
+        if id(self) in memo:
+            return memo[id(self)]
+        new_copy = DataItem()
+        memo[id(self)] = new_copy
+        for k, v in self.items():
+            new_key = copy.deepcopy(k, memo)
+            new_value = copy.deepcopy(v, memo)
+            new_copy[new_key] = new_value
+        return new_copy

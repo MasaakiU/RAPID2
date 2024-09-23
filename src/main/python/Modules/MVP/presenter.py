@@ -70,8 +70,9 @@ class Presenter():
     def compound_widget(self):
         return self.central_widget().compound_widget
     # methods free from complicated events
-    def convert_files_clicked(self):
-        file_path_list, file_type = QFileDialog.getOpenFileNames(self.central_widget(), 'Select mzdata file', str(gf.settings.last_opened_dir), filter="xml files (*.xml)")
+    def convert_files_clicked(self, file_path_list=None):
+        if file_path_list is None:
+            file_path_list, file_type = QFileDialog.getOpenFileNames(self.central_widget(), 'Select mzdata file', str(gf.settings.last_opened_dir), filter="xml files (*.xml)")
         if not len(file_path_list):
             return
         # file name check

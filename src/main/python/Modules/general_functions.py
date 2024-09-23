@@ -25,7 +25,7 @@ def rm_indent(string):
 # VERSION INFO #
 ################
 QApplication.setApplicationName('RAPID')
-QApplication.setApplicationVersion('0.2.4')
+QApplication.setApplicationVersion('0.2.5')
 update_history = {
     "0.2.0":"General framework was generated.", 
     "0.2.1":"Minor bugfixes, mz_RT_images was implemented, but is hidden from GUI.", 
@@ -46,6 +46,9 @@ update_history = {
     "0.2.4":rm_indent("""
         Added function in the menu to remove all targets at once.
         Added adduct ion syntax.
+    """), 
+    "0.2.5":rm_indent("""
+        Added an option to ignore cvParam_assertion during the conversion.
     """)
 
 }

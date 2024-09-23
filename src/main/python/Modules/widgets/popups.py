@@ -88,6 +88,34 @@ class WarningPopup(QMessageBox):
                         font.setBold(False)
                         grand_child.setFont(font)
 
+class Preferences(QDialog):
+    def __init__(self, cvParam_assertion):
+        super().__init__()
+        self.cvParam_assertion = QCheckBox("cvParam assertion (not recommended to uncheck)")
+        self.cvParam_assertion.setChecked(cvParam_assertion)
+        self.btn_ok = QPushButton("Ok")
+        self.btn_cancel = QPushButton("Cancel")
+        # レイアウト
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch(1)
+        btn_layout.addWidget(self.btn_cancel)
+        btn_layout.addWidget(self.btn_ok)
+        btn_layout.setContentsMargins(0,0,0,0)
+        layout = QVBoxLayout()
+        layout.addWidget(self.cvParam_assertion)
+        layout.addLayout(btn_layout)
+        self.setLayout(layout)
+        self.setFixedSize(self.sizeHint())
+        # シグナルコネクト
+        self.pressed_button = None
+        self.btn_ok.clicked.connect(self.btn_ok_clicked)
+        self.btn_cancel.clicked.connect(self.btn_cancel_clicked)
+    def btn_ok_clicked(self):
+        self.pressed_button = "ok"
+        self.close()
+    def btn_cancel_clicked(self):
+        self.close()
+
 def no_opened_files():
     return WarningPopup(message="There are no opened file.")
 

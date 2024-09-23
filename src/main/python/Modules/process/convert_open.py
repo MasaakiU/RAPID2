@@ -23,6 +23,8 @@ from PyQt6.QtCore import (
 from ..MVP import database as db
 from ..widgets import popups
 
+cvParam_assertion = True
+
 def mzdata2rpd(file_path, option):
     root = ET.ElementTree(file=file_path).getroot()
     # read first spectrum   ("discrete" or "continuous")
@@ -110,7 +112,8 @@ def parse_spectrum_settings(spectrum_settings_list):
             if cvParam.get("name") == RT_unit:
                 RT_list[i] = cvParam.get("value")
             else:
-                assert cvParam.get("value") == spectrum_settings_dict[cvParam.get("name")]
+                if cvParam_assertion:
+                   assert cvParam.get("value") == spectrum_settings_dict[cvParam.get("name")] 
     return RT_list, RT_unit, spectrum_settings_dict
 
 def get_rpd_path(file_path, return_rpd):

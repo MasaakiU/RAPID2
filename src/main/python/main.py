@@ -18,6 +18,7 @@ from Modules.widgets import popups
 from Modules.widgets import central_widget as cw
 from Modules.widgets import atomic_ratio_window as arw
 from Modules.process import atomic_ratio as ar
+from Modules.process import convert_open as co
 
 # SPECIAL FUNCTIONS
 def get_resource_path():
@@ -86,6 +87,7 @@ class MainWindow(QMainWindow):
         # Helps
         helpMenu = self.menuBar().addMenu('Help')
         helpMenu.addAction('About', self.show_about)
+        helpMenu.addAction('Settings', self.show_preferences)
 
         #########
         # STYLE #
@@ -97,11 +99,13 @@ class MainWindow(QMainWindow):
         ########
         if not getattr(sys, 'frozen', False):
             demo_file_path = gf.settings.resource_path.parents[2] / "demo_data" / "20220523_1-v12-mix3_0.mzdata.xml"
+            demo_file_path = gf.settings.resource_path.parents[2] / "demo_data" / "20240919_RPformate18MIN70B_neg-pos_PJL280_ER-mCh-iLID-LOVPLD_0_1_WITH-SEGMENT.mzdata.xml"
             demo_file_path_centroid = gf.settings.resource_path.parents[2] / "demo_data" / "20220523_1-v12-mix3_0_centroid.rpd"
             demo_file_path_rpd = gf.settings.resource_path.parents[2] / "demo_data" / "0_blank__p0_v23.rpd"
             demo_file_path_rpd = gf.settings.resource_path.parents[2] / "demo_data" / "8_HEK293T-d9Cho_B&D_p220.rpd"
             demo_file_path_csv = gf.settings.resource_path.parents[2] / "demo_data" / "PC_simplified_09092024.csv"
             ### open mzdata file and view
+            # self.presenter.convert_files_clicked(file_path_list=[demo_file_path])
             # self.presenter.open_files_clicked([demo_file_path_centroid])
             # self.presenter.open_files_clicked([demo_file_path_rpd])
             # self.presenter.load_targets_clicked(demo_file_path_csv)
@@ -112,6 +116,13 @@ class MainWindow(QMainWindow):
     def show_about(self):
         about_popup = popups.About()
         about_popup.exec()
+    def show_preferences(self):
+        preferencess_popup = popups.Preferences(cvParam_assertion=co.cvParam_assertion)
+        preferencess_popup.exec()
+        if preferencess_popup.pressed_button is None:
+            return
+        elif preferencess_popup.pressed_button == "ok":
+            co.cvParam_assertion = preferencess_popup.cvParam_assertion.isChecked()
     def show_atomic_ratio_window(self):
         self.atomic_ratio_calculator = arw.AtomicRatioCalculator()
         self.atomic_ratio_calculator.show()

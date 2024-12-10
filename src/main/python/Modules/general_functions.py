@@ -25,7 +25,7 @@ def rm_indent(string):
 # VERSION INFO #
 ################
 QApplication.setApplicationName('RAPID')
-QApplication.setApplicationVersion('0.2.5')
+QApplication.setApplicationVersion('0.2.6')
 update_history = {
     "0.2.0":"General framework was generated.", 
     "0.2.1":"Minor bugfixes, mz_RT_images was implemented, but is hidden from GUI.", 
@@ -49,8 +49,10 @@ update_history = {
     """), 
     "0.2.5":rm_indent("""
         Added an option to ignore cvParam_assertion during the conversion.
+    """),
+    "0.2.6":rm_indent("""
+        Support for centroid data
     """)
-
 }
 name = QApplication.applicationName()
 ver = QApplication.applicationVersion()

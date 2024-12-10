@@ -28,13 +28,22 @@ class SpectrumWindow(mpw.MyPlotWidget):
             self.plot1.setData(*spectrum[1])
         elif self.spectrum_type == "discrete":
             # process discrete data
-            mz_list, inten_list = spectrum
+            mz_list, inten_list = spectrum[0]
             mz_list = np.hstack((mz_list[:, np.newaxis], mz_list[:, np.newaxis])).flatten()
             inten_list = np.hstack((np.zeros((len(inten_list), 1), dtype=float), inten_list[:, np.newaxis])).flatten()
             connection = np.ones_like(mz_list, dtype=int)
             connection[1::2] = 0
             # set data
             self.plot0.setData(x=mz_list, y=inten_list, connect=connection)
+
+            # process discrete data
+            mz_list, inten_list = spectrum[1]
+            mz_list = np.hstack((mz_list[:, np.newaxis], mz_list[:, np.newaxis])).flatten()
+            inten_list = np.hstack((np.zeros((len(inten_list), 1), dtype=float), inten_list[:, np.newaxis])).flatten()
+            connection = np.ones_like(mz_list, dtype=int)
+            connection[1::2] = 0
+            # set data
+            self.plot1.setData(x=mz_list, y=inten_list, connect=connection)
         else:
             raise Exception(f"unknown spectrum type\n{self.spectrum_type}")
     def update_mz_region(self, mz_btm, mz_top):

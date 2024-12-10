@@ -41,7 +41,7 @@ class MainWindow(QMainWindow):
         ar.load_elements(gf.settings.resource_path / "Atomic Weights and Isotopic Compositions 20220704.txt")
         # hidden settings
         image_on = False
-        fast_display = True
+        fast_display = False    #True
 
         super().__init__()
         self.setWindowTitle(gf.app_version())
@@ -101,13 +101,16 @@ class MainWindow(QMainWindow):
             demo_file_path = gf.settings.resource_path.parents[2] / "demo_data" / "20220523_1-v12-mix3_0.mzdata.xml"
             demo_file_path = gf.settings.resource_path.parents[2] / "demo_data" / "20240919_RPformate18MIN70B_neg-pos_PJL280_ER-mCh-iLID-LOVPLD_0_1_WITH-SEGMENT.mzdata.xml"
             demo_file_path_centroid = gf.settings.resource_path.parents[2] / "demo_data" / "20220523_1-v12-mix3_0_centroid.rpd"
+            demo_file_path_centroid = gf.settings.resource_path.parents[2] / "demo_data" / "20241129_Cho-release_centroid_9_P2-8-15_spl1_p0_centroid.rpd"
             demo_file_path_rpd = gf.settings.resource_path.parents[2] / "demo_data" / "0_blank__p0_v23.rpd"
             demo_file_path_rpd = gf.settings.resource_path.parents[2] / "demo_data" / "8_HEK293T-d9Cho_B&D_p220.rpd"
             demo_file_path_csv = gf.settings.resource_path.parents[2] / "demo_data" / "PC_simplified_09092024.csv"
+            demo_file_path_xml_centroid = gf.settings.resource_path.parents[2] / "demo_data" / "20241129_Cho-release_centroid_9_P2-8-15_spl1_p0_centroid.mzdata.xml"
             ### open mzdata file and view
             # self.presenter.convert_files_clicked(file_path_list=[demo_file_path])
-            # self.presenter.open_files_clicked([demo_file_path_centroid])
+            # self.presenter.convert_files_clicked(file_path_list=[demo_file_path_xml_centroid])
             # self.presenter.open_files_clicked([demo_file_path_rpd])
+            # self.presenter.open_files_clicked([demo_file_path_centroid])
             # self.presenter.load_targets_clicked(demo_file_path_csv)
 
             ### convert mzdata file

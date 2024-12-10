@@ -11,6 +11,7 @@ import base64
 import struct
 import pickle
 import traceback
+from pathlib import Path
 
 from PyQt6.QtCore import (
     Qt, 
@@ -130,6 +131,7 @@ def get_rpd_path(file_path, return_rpd):
         return rpd_path
 
 def convert_file(file_path):
+    print("converting into rpd format...")
     rpd_path, rpd = get_rpd_path(file_path, return_rpd=True)
     # compress_test(rpd, file_path)
     # joblib.dump(rpd, rpd_path, compress=("lzma", 1))
@@ -137,7 +139,8 @@ def convert_file(file_path):
     # history of dumping #
     ######################
     # dump_2_2(rpd, rpd_path)
-    dump_2_3(rpd, rpd_path)
+    # dump_2_3(rpd, rpd_path)
+    dump_2_3_1(rpd, rpd_path)
 
 def compress_test(rpd, file_path):
     import bz2
@@ -285,7 +288,7 @@ class WorkerResultsProcessor():
 def open_file(file_path):
     if file_path.suffix == ".rpd":
         # rpd, message = load_2_2(file_path)
-        rpd, message = load_2_3(file_path)
+        rpd, message = load_2_3_1(file_path)
     elif (file_path.suffix == ".xml") and (file_path.with_suffix("").suffix == ".mzdata"):
         raise Exception(f"Conversion to '.rpd' file is required to open '\n{file_path}'")
         rpd = mzdata2rpd(file_path, option="skip RAPID")
@@ -385,7 +388,7 @@ def revert_deep_diff(array2d, initial_arrays, axis_list):
     # print(time.time() - t0)
     return array2d
 
-def dump_2_2(rpd, rpd_path):
+def dump_2_2(rpd: db.RPD, rpd_path):
     """ 
     # KEYS TO SAVE
     # info
@@ -492,7 +495,7 @@ def dump_2_2(rpd, rpd_path):
             header_mz_set_inten_set_no_compression_data_bytes
         )
 
-def dump_2_3(rpd, rpd_path):
+def dump_2_3(rpd: db.RPD, rpd_path):
     """ 
     # KEYS TO SAVE
     # info
@@ -613,6 +616,158 @@ def dump_2_3(rpd, rpd_path):
             data_hash + 
             header_mz_set_inten_set_no_compression_data_bytes
         )
+
+def dump_2_3_1(rpd: db.RPD, rpd_path):
+    """ 
+    # KEYS TO SAVE
+    # info
+    self.data_hash
+
+    # data
+    self.spectrum_type
+    self.mz_set
+    self.inten_set
+
+    # RT info and etc.
+    self.RT_list
+    self.RT_unit
+    self.spectrum_settings_dict
+
+    # general info
+    self.ionization_type = ionization_type
+    self.analyzer_type = analyzer_type
+
+    # KEYS NO SAVE
+        self.file_path
+        self.N_scan
+    """
+    ##########
+    # header #
+    ##########
+    header = Header()
+    with BytesIO() as f:
+        pickle.dump(header, f)
+        f.seek(0)
+        header_bytes = f.read()
+
+    #######################
+    # no_compression_data #
+    #######################
+    no_compression_data = NoCompressionData(
+        spectrum_type = rpd.spectrum_type, 
+        RT_list = rpd.RT_list, 
+        RT_unit = rpd.RT_unit, 
+        spectrum_settings_dict = rpd.spectrum_settings_dict, 
+        ionization_type = rpd.ionization_type, 
+        analyzer_type = rpd.analyzer_type, 
+        mz_set_nan_start_locs = rpd.get_mz_set_nan_start_locs()
+    )
+    with BytesIO() as f:
+        pickle.dump(no_compression_data, f)
+        f.seek(0)
+        no_compression_data_bytes = f.read()
+
+    import time
+    t0 = time.time()
+
+    #############
+    # inten_set #
+    #############
+    print("compressing intensity data...")
+    with BytesIO() as f:
+        if rpd.spectrum_type == "continuous":
+            (initial_inten_array0, ), inten_diff = deep_diff(rpd.inten_set, axis_list=[0]) # 88.5 MB
+            np.savez_compressed(
+                f, 
+                initial_inten_array0=initial_inten_array0, 
+                inten_set_diff=inten_diff
+            )
+        elif rpd.spectrum_type == "discrete":
+            np.savez_compressed(
+                f, 
+                inten_set_diff=rpd.inten_set
+            )
+        else:
+            raise Exception(f"unknown spectrum type: {rpd.spectrum_type}")
+        f.seek(0)
+        inten_set_bytes = f.read()
+
+    ##########
+    # mz_set #
+    ##########
+    print("compressing m/z data...")
+    with BytesIO() as f:
+        mz_set = np.nan_to_num(rpd.mz_set, nan=0)  # Without this line, deep_diff function will lost information.
+        if rpd.spectrum_type == "continuous":
+            (initial_mz_array0, initial_mz_array1, initial_mz_array2), mz_set_diff = deep_diff(mz_set, axis_list=[1, 1, 0])
+            np.savez_compressed(
+                f, 
+                initial_mz_array0=initial_mz_array0, 
+                initial_mz_array1=initial_mz_array1, 
+                initial_mz_array2=initial_mz_array2, 
+                mz_set_diff=mz_set_diff
+            )       # 35.6 MB
+        elif rpd.spectrum_type == "discrete":
+            np.savez_compressed(
+                f, 
+                mz_set_diff=mz_set
+            )
+        else:
+            raise Exception(f"unknown spectrum type: {rpd.spectrum_type}")
+        f.seek(0)
+        mz_set_bytes = f.read()
+
+    ###########################################
+    # mz_set_info_for_chromatogram_extraction #
+    ###########################################
+    print("compressing additional info...")
+    if rpd.spectrum_type == "continuous":
+        mz_set_info_for_chromatogram_extraction, ref_row = rpd.get_mz_set_info_for_chromatogram_extraction()
+        with BytesIO() as f:
+            np.savez_compressed(
+                f, 
+                ref_row=ref_row, 
+                mz_set_info_for_chromatogram_extraction=mz_set_info_for_chromatogram_extraction, 
+            )
+            f.seek(0)
+            mz_set_info_for_chromatogram_extraction_bytes = f.read()
+    elif rpd.spectrum_type == "discrete":
+        mz_set_info_for_chromatogram_extraction_bytes = b""
+    else:
+        raise Exception(f"unknown spectrum type: {rpd.spectrum_type}")
+
+    #################
+    # COMBINE BYTES #
+    #################
+    header_mz_set_inten_set_no_compression_data_bytes = (
+        len(header_bytes).to_bytes(InfoNoSave.header_info_len, byteorder=InfoNoSave.byteorder, signed=False) + 
+        header_bytes + 
+        len(mz_set_bytes).to_bytes(header.mz_set_bytes_info_len, byteorder=InfoNoSave.byteorder, signed=False) + 
+        mz_set_bytes + 
+        len(inten_set_bytes).to_bytes(header.inten_set_bytes_info_len, byteorder=InfoNoSave.byteorder, signed=False) + 
+        inten_set_bytes + 
+        len(mz_set_info_for_chromatogram_extraction_bytes).to_bytes(header.mz_set_info_for_chromatogram_extraction_bytes_info_len, byteorder=InfoNoSave.byteorder, signed=False) + 
+        mz_set_info_for_chromatogram_extraction_bytes + 
+        len(no_compression_data_bytes).to_bytes(header.no_compression_data_bytes_info_len, byteorder=InfoNoSave.byteorder, signed=False) + 
+        no_compression_data_bytes
+    )
+    ########
+    # SAVE #
+    ########
+    with open(rpd_path, "wb") as f:
+        magic_number = InfoNoSave.magic_number
+        major_ver = (header.major_ver).to_bytes(1, byteorder=InfoNoSave.byteorder, signed=False)
+        minor_ver = (header.minor_ver).to_bytes(1, byteorder=InfoNoSave.byteorder, signed=False)
+        data_hash = InfoNoSave.generate_hash(header_mz_set_inten_set_no_compression_data_bytes).encode()
+        f.write(
+            magic_number + 
+            major_ver + 
+            minor_ver + 
+            data_hash + 
+            header_mz_set_inten_set_no_compression_data_bytes
+        )
+    print("DONE")
+    print()
 
 def load_2_2(rpd_path):
     with open(rpd_path, "rb") as f:
@@ -806,6 +961,146 @@ def load_2_3(rpd_path):
     )
     return rpd, message
     
+def load_2_3_1(rpd_path):
+    with open(rpd_path, "rb") as f:
+        magic_number = f.read(InfoNoSave.magic_number_size())
+        if magic_number != InfoNoSave.magic_number:
+            raise Exception(f"file broken: {rpd_path}")
+        major_ver = int.from_bytes(f.read(InfoNoSave.major_ver_size()), byteorder=InfoNoSave.byteorder)
+        minor_ver = int.from_bytes(f.read(InfoNoSave.minor_ver_size()), byteorder=InfoNoSave.byteorder)
+        data_hash = f.read(InfoNoSave.hash_size())
+        header_size = int.from_bytes(f.read(InfoNoSave.header_info_len), byteorder=InfoNoSave.byteorder)
+        header_bytes = f.read(header_size)
+
+        ################################
+        # version specific process PRE #
+        ################################
+        version_int = major_ver + minor_ver/10
+        if version_int == 2.2:
+            message = f"The file version 2.2 may have lost some information in the high m/z range, although it should be negligible in most cases.\nPlease re-generate '*.rpd' file from the original data, such as '*.mzdata'.\n{rpd_path}"
+            rpd = load_2_2(rpd_path)
+            mz_set_info_for_chromatogram_extraction, ref_row = rpd.get_mz_set_info_for_chromatogram_extraction()
+            rpd.ref_row = ref_row
+            rpd.mz_set_info_for_chromatogram_extraction = mz_set_info_for_chromatogram_extraction
+            return rpd, message
+        elif version_int == 2.3:
+            message = None
+            print(f"file version: {major_ver}.{minor_ver}")
+
+        ###############
+        # open header #
+        ###############
+        with BytesIO() as f_h:
+            f_h.write(header_bytes)
+            f_h.seek(0)
+            header = pickle.load(f_h)
+
+        ##############
+        # load bytes #
+        ##############
+        mz_set_bytes_size = int.from_bytes(f.read(header.mz_set_bytes_info_len), byteorder=InfoNoSave.byteorder)
+        mz_set_bytes = f.read(mz_set_bytes_size)
+        inten_set_bytes_size = int.from_bytes(f.read(header.inten_set_bytes_info_len), byteorder=InfoNoSave.byteorder)
+        inten_set_bytes = f.read(inten_set_bytes_size)
+        mz_set_info_for_chromatogram_extraction_bytes_size = int.from_bytes(f.read(header.mz_set_info_for_chromatogram_extraction_bytes_info_len), byteorder=InfoNoSave.byteorder)
+        mz_set_info_for_chromatogram_extraction_bytes = f.read(mz_set_info_for_chromatogram_extraction_bytes_size)
+        no_compression_data_bytes_size = int.from_bytes(f.read(header.no_compression_data_bytes_info_len), byteorder=InfoNoSave.byteorder)
+        no_compression_data_bytes = f.read(no_compression_data_bytes_size)
+
+        ############################
+        # open no_compression_data #
+        ############################
+        with BytesIO() as f_ncd:
+            f_ncd.write(no_compression_data_bytes)
+            f_ncd.seek(0)
+            no_compression_data = pickle.load(f_ncd)
+
+        ###############
+        # open mz_set #
+        ###############
+        with BytesIO() as f_mz:
+            f_mz.write(mz_set_bytes)
+            f_mz.seek(0)
+            compressed_mz_set = np.load(f_mz)
+            if no_compression_data.spectrum_type == "continuous":
+                initial_mz_array_list = [
+                    compressed_mz_set["initial_mz_array0"], 
+                    compressed_mz_set["initial_mz_array1"], 
+                    compressed_mz_set["initial_mz_array2"]
+                ]
+                mz_set_diff = compressed_mz_set["mz_set_diff"]
+                mz_set_loaded = revert_deep_diff(mz_set_diff, initial_mz_array_list, axis_list=[1, 1, 0])
+            elif no_compression_data.spectrum_type == "discrete":
+                mz_set_loaded = compressed_mz_set["mz_set_diff"]
+            else:
+                raise Exception(f"unknown spectrum type: {no_compression_data.spectrum_type}")
+
+        ##################
+        # open inten_set #
+        ##################
+        with BytesIO() as f_inten:
+            f_inten.write(inten_set_bytes)
+            f_inten.seek(0)
+            compressed_inten_set = np.load(f_inten)
+            if no_compression_data.spectrum_type == "continuous":
+                initial_inten_array_list = [
+                    compressed_inten_set["initial_inten_array0"], 
+                ]
+                inten_set_diff = compressed_inten_set["inten_set_diff"]
+                inten_set_loaded = revert_deep_diff(inten_set_diff, initial_inten_array_list, axis_list=[0])
+            elif no_compression_data.spectrum_type == "discrete":
+                inten_set_loaded = compressed_inten_set["inten_set_diff"]
+            else:
+                raise Exception(f"unknown spectrum type: {no_compression_data.spectrum_type}")
+
+        ######################################################
+        # open mz_set_info_for_chromatogram_extraction_bytes #
+        ######################################################
+        with BytesIO() as f_mz_set_info:
+            if no_compression_data.spectrum_type == "continuous":
+                f_mz_set_info.write(mz_set_info_for_chromatogram_extraction_bytes)
+                f_mz_set_info.seek(0)
+                compressed_mz_set_info_for_chromatogram_extraction = np.load(f_mz_set_info)
+                ref_row = compressed_mz_set_info_for_chromatogram_extraction["ref_row"]
+                mz_set_info_for_chromatogram_extraction = compressed_mz_set_info_for_chromatogram_extraction["mz_set_info_for_chromatogram_extraction"]
+            elif no_compression_data.spectrum_type == "discrete":
+                ref_row = 0
+                mz_set_info_for_chromatogram_extraction = None
+                assert len(mz_set_info_for_chromatogram_extraction_bytes) == 0
+            else:
+                raise Exception(f"unknown spectrum type: {no_compression_data.spectrum_type}")
+
+        #################################
+        # version specific process POST #
+        #################################
+        if major_ver + minor_ver/10 >= 2.3:
+            for nan_start_row, nan_start_col in zip(*no_compression_data.mz_set_nan_start_locs):
+                mz_set_loaded[nan_start_row, nan_start_col:] = np.nan
+
+    # LOAD
+    rpd = db.RPD(
+        data_hash = data_hash, 
+        file_path = rpd_path, 
+        spectrum_type = no_compression_data.spectrum_type, 
+        mz_set = mz_set_loaded, 
+        inten_set = inten_set_loaded, 
+        RT_list = no_compression_data.RT_list, 
+        RT_unit = no_compression_data.RT_unit, 
+        spectrum_settings_dict = no_compression_data.spectrum_settings_dict, 
+        # general_info
+        ionization_type = no_compression_data.ionization_type, 
+        analyzer_type = no_compression_data.analyzer_type, 
+        # Info that is not set during the file conversion
+        ref_row=ref_row, 
+        mz_set_info_for_chromatogram_extraction=mz_set_info_for_chromatogram_extraction
+    )
+    return rpd, message
+    
+
+
+
+
+
 
 
 

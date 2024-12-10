@@ -134,14 +134,18 @@ class RPD():
     #     inten_list[np.isnan(inten_list_pre).all(axis=1)] = np.nan
     #     return inten_list
     def extract_chromatogram_core_with_cython(self, mz_btm, mz_top):
-        # self.ref_row において、基準となる idx を求める
-        mz_btm_idx_on_ref_row = max(rpd_calc.index_greater_than(mz_btm, self.ref_mz_list()) - 1, 0)
-        mz_top_idx_on_ref_row = min(rpd_calc.index_greater_than(mz_top, self.ref_mz_list())    , self.mz_set.shape[1] - 1)
-        # 基準となる idx を元に、（予め計算しておいた mz_ref_info_for... に基づいて）探索範囲の idx を取得する
-        mz_btm_idx = self.mz_set_info_for_chromatogram_extraction[0, mz_btm_idx_on_ref_row]
-        mz_top_idx = self.mz_set_info_for_chromatogram_extraction[1, mz_top_idx_on_ref_row]
-        extracted_mz_set = self.mz_set[:, mz_btm_idx:mz_top_idx + 1]
-        extracted_inten_set = self.inten_set[:, mz_btm_idx:mz_top_idx + 1]
+        if self.spectrum_type == "continuous":
+            # self.ref_row において、基準となる idx を求める
+            mz_btm_idx_on_ref_row = max(rpd_calc.index_greater_than(mz_btm, self.ref_mz_list()) - 1, 0)
+            mz_top_idx_on_ref_row = min(rpd_calc.index_greater_than(mz_top, self.ref_mz_list())    , self.mz_set.shape[1] - 1)
+            # 基準となる idx を元に、（予め計算しておいた mz_ref_info_for... に基づいて）探索範囲の idx を取得する
+            mz_btm_idx = self.mz_set_info_for_chromatogram_extraction[0, mz_btm_idx_on_ref_row]
+            mz_top_idx = self.mz_set_info_for_chromatogram_extraction[1, mz_top_idx_on_ref_row]
+            extracted_mz_set = self.mz_set[:, mz_btm_idx:mz_top_idx + 1]
+            extracted_inten_set = self.inten_set[:, mz_btm_idx:mz_top_idx + 1]
+        elif self.spectrum_type == "discrete":
+            extracted_mz_set = self.mz_set
+            extracted_inten_set = self.inten_set
         # 上記探索範囲の idx を元にデータをを切り出し -> 漸く chromatogram_extraction が行える
         inten_list = rpd_calc.extract_chromatogram_core_float64int32(mz_btm, mz_top, extracted_mz_set, extracted_inten_set)
         # inten_list = self.extract_chromatogram_core(mz_btm, mz_top, extracted_mz_set, extracted_inten_set)
@@ -212,16 +216,19 @@ class RPD():
         if not calc_minimum_info:
             BG = extracted_inten_list_RT.min() * (extracted_RT_list[-1] - extracted_RT_list[0])
 
-            # self.ref_row において、基準となる idx を求める
-            mz_btm_idx_on_ref_row = max(rpd_calc.index_greater_than(mz_btm, self.ref_mz_list()) - 1, 0)
-            mz_top_idx_on_ref_row = min(rpd_calc.index_greater_than(mz_top, self.ref_mz_list())    , self.mz_set.shape[1] - 1)
-            # 基準となる idx を元に、（予め計算しておいた mz_ref_info_for... に基づいて）探索範囲の idx を取得する
-            mz_btm_idx = self.mz_set_info_for_chromatogram_extraction[0, mz_btm_idx_on_ref_row]
-            mz_top_idx = self.mz_set_info_for_chromatogram_extraction[1, mz_top_idx_on_ref_row]
-            # extracted_mz_set = self.mz_set[:, mz_btm_idx:mz_top_idx + 1]
-            extracted_inten_set2 = extracted_inten_set[:, mz_btm_idx:mz_top_idx + 1]
-            extracted_mz_set2 = extracted_mz_set[:, mz_btm_idx:mz_top_idx + 1]
-
+            if self.spectrum_type == "continuous":
+                # self.ref_row において、基準となる idx を求める
+                mz_btm_idx_on_ref_row = max(rpd_calc.index_greater_than(mz_btm, self.ref_mz_list()) - 1, 0)
+                mz_top_idx_on_ref_row = min(rpd_calc.index_greater_than(mz_top, self.ref_mz_list())    , self.mz_set.shape[1] - 1)
+                # 基準となる idx を元に、（予め計算しておいた mz_ref_info_for... に基づいて）探索範囲の idx を取得する
+                mz_btm_idx = self.mz_set_info_for_chromatogram_extraction[0, mz_btm_idx_on_ref_row]
+                mz_top_idx = self.mz_set_info_for_chromatogram_extraction[1, mz_top_idx_on_ref_row]
+                # extracted_mz_set = self.mz_set[:, mz_btm_idx:mz_top_idx + 1]
+                extracted_inten_set2 = extracted_inten_set[:, mz_btm_idx:mz_top_idx + 1]
+                extracted_mz_set2 = extracted_mz_set[:, mz_btm_idx:mz_top_idx + 1]
+            elif self.spectrum_type == "discrete":
+                extracted_inten_set2 = extracted_inten_set
+                extracted_mz_set2 = extracted_mz_set
             extracted_mz_list, extracted_inten_list_mz = self.calc_mz_inten_list_average(extracted_mz_set2.reshape(-1), extracted_inten_set2.reshape(-1), RT_idx_top - RT_idx_btm)
             extracted_RT_argmax = np.argmax(extracted_inten_list_RT)
             extracted_mz_argmax = np.argmax(extracted_inten_list_mz)
